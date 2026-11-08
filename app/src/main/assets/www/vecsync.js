@@ -58,7 +58,8 @@
     if (debug) note(`${c.element} ${phase}`);
   }
   function step() {
-    requestAnimationFrame(step);
+    // 11-09 플레오스 최적화: 차량판이 주행 중 화면을 쉴 때(window.vecCarHide)는 초당 10번만 깨어난다(매 장 화면 갱신 요청을 하지 않는다). 웹은 예전 그대로
+    if (window.vecCarHide) setTimeout(() => requestAnimationFrame(step), 100); else requestAnimationFrame(step);
     if (!S.audio || !S.map) return tag();
     const t = pos(), jump = S.last < 0 || t < S.last - 0.02 || t > S.last + 0.5;
     if (jump) reindex(t);

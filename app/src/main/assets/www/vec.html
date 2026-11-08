@@ -270,7 +270,9 @@
   const cv = document.createElement('canvas'), ctx = cv.getContext('2d');
   const gcv = $('g');
   // WebGL1 이 막힌 기기(11-09 Pleos Connect 에뮬레이터 웹뷰: "WebGL1 blocklisted")에서는 WebGL2 로 그린다. 셰이더는 GLSL ES 1.00 이라 그대로 돈다
-  const gl = (gcv.getContext('webgl', { antialias: false, alpha: false }) || gcv.getContext('webgl2', { antialias: false, alpha: false }));
+  // 11-09 플레오스 최적화(차량판만): 바다 판을 WebGL2 로 먼저 열어, 광원 색을 GPU 를 기다리지 않고 읽는다(PIXEL_PACK_BUFFER + fence). 웹은 예전 그대로 WebGL1 먼저
+  const GL_CAR = /[?&]car=/.test(location.search), GL_OPT = { antialias: false, alpha: false };
+  const gl = GL_CAR ? (gcv.getContext('webgl2', GL_OPT) || gcv.getContext('webgl', GL_OPT)) : (gcv.getContext('webgl', GL_OPT) || gcv.getContext('webgl2', GL_OPT));
   const lerp = (a, b, t) => a + (b - a) * t;
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
@@ -777,7 +779,7 @@
   uniform vec2 uRes,uSunP;
   uniform float uK,uTc;
   uniform vec3 uHi,uAcc,uGlow;
-  uniform float uIri,uMir,uJew;
+  uniform float uIri,uMir,uJew,uCull;
   uniform vec2 uRS;
   uniform vec4 uD[20],uE[20],uB[20];
   uniform float uZ[20];                                            // 카메라에서 앞쪽 거리. 가까운 것부터 들어온다
@@ -789,6 +791,9 @@
       if(D.z<=0.)continue;
       vec4 E=uE[i],B=uB[i];float sc=.55+.45*B.x;                  // 소리가 가장 클 때가 왜곡의 최대치, 조용하면 절반쯤
       vec2 dp=p-D.xy;
+      // 11-09 플레오스 최적화(차량판만, uCull): 이 물방울이 닿을 수 있는 가장 먼 곳(반지름×2.6, 가장 크게 일렁이고 늘어날 때)보다 멀면
+      //   무거운 계산(sin·atan)을 건너뛴다. 그 거리의 물방울은 결과(d·색)를 바꾸지 못하므로 화면은 같다
+      if(uCull>.5&&dot(dp,dp)>pow((D.z*2.6+4.)*max(E.x,1.),2.))continue;
       if(uMir>.5){                                               // 수면 반사: 수면처럼 천천히 울렁인다(11-03 광호님 「너무 빨리 흔들린다」 → 약 0.15~0.3Hz)
         float dw=smoothstep(0.,D.z*1.2,-dp.y+D.z*.3);              // 수면에서 멀어질수록(아래로 갈수록) 더 일그러진다
         dp.x+=D.z*dw*(.06*sin(dp.y/D.z*3.+uTc*.016+E.z)+.03*sin(dp.y/D.z*7.-uTc*.029+E.w));
@@ -863,6 +868,23 @@
     gl_FragColor=vec4(c,a);
   }`;
   const sunRead = { n: 0, px: new Uint8Array(100) };
+  // 차량판 광원 읽기(기다리지 않기): 이번에 읽기를 「맡기고」, 다음 차례(0.5초 뒤)에 GPU 가 끝냈으면 그 값을 쓴다.
+  //   11-09 탭 실측: 기다리는 readPixels 가 정차 중 메인 스레드의 18.8%(GPU 가 한 장을 다 그릴 때까지 멈춤)
+  function sunReadAsync(x, y) {
+    let got = false;
+    if (sunRead.fence) {
+      const s = gl.clientWaitSync(sunRead.fence, 0, 0);
+      if (s === gl.TIMEOUT_EXPIRED) return false;                 // 아직 안 끝났다: 이번 차례는 건너뛴다
+      gl.deleteSync(sunRead.fence); sunRead.fence = null;
+      if (s !== gl.WAIT_FAILED) { gl.bindBuffer(gl.PIXEL_PACK_BUFFER, sunRead.pbo); gl.getBufferSubData(gl.PIXEL_PACK_BUFFER, 0, sunRead.px); gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null); got = true; }
+    }
+    if (!sunRead.pbo) { sunRead.pbo = gl.createBuffer(); gl.bindBuffer(gl.PIXEL_PACK_BUFFER, sunRead.pbo); gl.bufferData(gl.PIXEL_PACK_BUFFER, 100, gl.STREAM_READ); gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null); }
+    gl.bindBuffer(gl.PIXEL_PACK_BUFFER, sunRead.pbo);
+    gl.readPixels(x, y, 5, 5, gl.RGBA, gl.UNSIGNED_BYTE, 0);       // 버퍼로: 기다리지 않는다
+    gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
+    sunRead.fence = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0); gl.flush();
+    return got;
+  }
   // 광원 빛을 받는 곳(수면·해무·입자)이 쓰는 색: 팔레트의 광원 밝기에 화면에 보이는 광원 색을 입힌다
   const sunGlow = () => { const g = (pal.glow[0] * 0.3 + pal.glow[1] * 0.6 + pal.glow[2] * 0.1); return st.sunC.map(c => c * g); };
   const SUN_ADD = 0.62;               // 광원 가산 세기(스크린 합성 때와 비슷한 밝기)
@@ -1003,17 +1025,24 @@
           // 11-09 플레오스 최적화(차량판만): 픽셀 읽기(readPixels)는 GPU 를 기다리게 해 차량 칩에서 비싸다 → 0.5초 간격으로 읽고,
           //   따라가는 세기는 지난 시간만큼 키워 예전과 같은 속도로 따라간다. 웹 시험판은 예전 그대로(6프레임마다 0.15/0.03)
           const sunCar = sunRead.car ??= /[?&]car=/.test(location.search), sunNow = performance.now();
-          if (sunCar ? sunNow - (sunRead.t || 0) >= 500 : (sunRead.n = (sunRead.n + 1) % 6) === 0) {           // 광원 가운데의 실제 밝기를 읽어 둔다: 수면은 이보다 밝으면 안 된다(11-03 광호님)
-            if (sunCar) { const fk = Math.min(10, (sunNow - (sunRead.t || sunNow - 500)) / 100); sunRead.t = sunNow; sunRead.kc = 1 - Math.pow(0.85, fk); sunRead.kl = 1 - Math.pow(0.97, fk); }
+          // 차량판: 읽기는 1.5초마다(기다리지 않는 읽기도 결과를 받을 때 GPU 프로세스와 한 번 주고받는다), 그 값을 「목표」로 두고
+          //   매 장 예전과 같은 빠르기(색 약 0.6초, 밝기 약 3.3초 — 0.1초마다 0.15·0.03 과 같음)로 따라가 화면은 예전처럼 부드럽다
+          if (sunCar && sunRead.TC) { const e = Math.min(0.25, (sunNow - (sunRead.f || sunNow)) / 1000); for (let c = 0; c < 3; c++) st.sunC[c] += (sunRead.TC[c] - st.sunC[c]) * (1 - Math.exp(-e / 0.615)); st.sunL += (sunRead.TL - st.sunL) * (1 - Math.exp(-e / 3.28)); }
+          if (sunCar) sunRead.f = sunNow;
+          if (sunCar ? sunNow - (sunRead.t || 0) >= 1500 : (sunRead.n = (sunRead.n + 1) % 6) === 0) {           // 광원 가운데의 실제 밝기를 읽어 둔다: 수면은 이보다 밝으면 안 된다(11-03 광호님)
+            if (sunCar) { sunRead.t = sunNow; sunRead.kc = 0; sunRead.kl = 0; }   // 차량판은 아래에서 목표만 바꾼다
             else { sunRead.kc = 0.15; sunRead.kl = 0.03; }
             const H0 = gcv.height, cr = Math.cos(st.roll), sr = Math.sin(st.roll);
             const x = Math.round(ux + H0 * (cr * sx + sr * 0.035)) - 2, y = Math.round(uy + H0 * (-sr * sx + cr * 0.035)) - 2;
             if (x >= 0 && y >= 0 && x + 5 <= gcv.width && y + 5 <= H0) {
-              gl.readPixels(x, y, 5, 5, gl.RGBA, gl.UNSIGNED_BYTE, sunRead.px);
+              const got = sunCar && gl.fenceSync ? sunReadAsync(x, y) : (gl.readPixels(x, y, 5, 5, gl.RGBA, gl.UNSIGNED_BYTE, sunRead.px), true);
+              if (got) {
               let L = 0, j = 0; for (let i = 0; i < 100; i += 4) { const l = (0.2126 * sunRead.px[i] + 0.7152 * sunRead.px[i + 1] + 0.0722 * sunRead.px[i + 2]) / 255; if (l > L) { L = l; j = i; } }
               const m = Math.max(sunRead.px[j], sunRead.px[j + 1], sunRead.px[j + 2], 1);
               for (let c = 0; c < 3; c++) st.sunC[c] += (sunRead.px[j + c] / m - st.sunC[c]) * sunRead.kc;   // 광원의 실제 색(가장 밝은 채널 = 1)
               st.sunL += (L - st.sunL) * sunRead.kl;                      // 약 3초에 걸쳐 천천히 따라간다: 광원이 박동에 맞춰 밝아져도 수면 상한은 출렁이지 않는다
+              if (sunCar) { sunRead.TC = [0, 1, 2].map(c => sunRead.px[j + c] / m); sunRead.TL = L; }   // 차량판: 목표
+              }
             }
           }
         };
@@ -1023,7 +1052,7 @@
       gl.bindAttribLocation(dp, loc, 'a'); gl.linkProgram(dp);
       if (gl.getProgramParameter(dp, gl.LINK_STATUS)) {
         dropProg = dp; dropU = {};
-        for (const k of ['uScene', 'uSpec', 'uRes', 'uSunP', 'uK', 'uTc', 'uHi', 'uAcc', 'uGlow', 'uIri', 'uMir', 'uRS', 'uJew', 'uZ']) dropU[k] = gl.getUniformLocation(dp, k);
+        for (const k of ['uScene', 'uSpec', 'uRes', 'uSunP', 'uK', 'uTc', 'uHi', 'uAcc', 'uGlow', 'uIri', 'uMir', 'uRS', 'uJew', 'uZ', 'uCull']) dropU[k] = gl.getUniformLocation(dp, k);
         dropU.uD = gl.getUniformLocation(dp, 'uD[0]'); dropU.uE = gl.getUniformLocation(dp, 'uE[0]'); dropU.uB = gl.getUniformLocation(dp, 'uB[0]');
         gl.useProgram(dp); gl.uniform1i(dropU.uScene, 1); gl.uniform1i(dropU.uSpec, 0); gl.useProgram(pr);
         sceneTex = gl.createTexture(); gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, sceneTex);
@@ -1625,7 +1654,7 @@
   // ---------- 주변 차량 ----------
   // 공모전판은 일반 도로 흐름을 시뮬레이션한다(가상 데이터). 실제 인식 정보가 열리면 window.vecSurround.feed 로 같은 값을 넣는다.
   // 그리기 쪽은 surroundList() 만 본다: 카메라 기준 세계 방향 오프셋(단위)
-  const qpT = qp0.get('traffic');
+  const qpT = qp0.get('traffic'), NO_DROPS = qp0.get('drops') === '0';
   const LIVE_ONLY = qp0.has('car') && !qp0.has('demo');            // 실차에서는 가짜 차를 그리지 않는다. 시연(demo)만 시뮬레이션
   const ROAD = { lanes: [-3.5, 0, 3.5], back: -60, front: 190, cross: 22, stop: 20 };
   const road = { th: null, egoX: 0, stopT: 0, pedDone: false };
@@ -1812,6 +1841,7 @@
   }
   function surroundList() {
     const out = [];
+    if (NO_DROPS) return out;                                    // 시험용(&drops=0): 물방울을 그리지 않는다
     if (noct.on) {
       const c = Math.cos(st.travel), s = Math.sin(st.travel);
       for (const d of noct.drops) out.push({ id: d.id, kind: d.kind, ox: (d.x * c - d.s * s) * MV, oz: (d.x * s + d.s * c) * MV, a: clamp((72 - d.s) / 10, 0, 1) });
@@ -2159,7 +2189,7 @@
     if (dx1 <= dx0 || dy1 <= dy0) return;
     gl.activeTexture(gl.TEXTURE1);
     if (sceneW !== W0 || sceneH !== H0) { gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, W0, H0, 0, gl.RGB, gl.UNSIGNED_BYTE, null); sceneW = W0; sceneH = H0; }
-    gl.copyTexSubImage2D(gl.TEXTURE_2D, 0, cx0, cy0, cx0, cy0, cx1 - cx0, cy1 - cy0);
+    if (!GL_CAR) gl.copyTexSubImage2D(gl.TEXTURE_2D, 0, cx0, cy0, cx0, cy0, cx1 - cx0, cy1 - cy0);   // 차량판은 겹마다 그 겹 물방울 둘레만 담는다(아래)
     gl.activeTexture(gl.TEXTURE0);
     gl.useProgram(dropProg);
     gl.uniform2f(dropU.uRes, W0, H0); gl.uniform1f(dropU.uK, 0.035 * H0); gl.uniform1f(dropU.uTc, dropTc);
@@ -2171,6 +2201,7 @@
     gl.enable(gl.SCISSOR_TEST); gl.scissor(dx0, dy0, dx1 - dx0, dy1 - dy0);
     // 수면 반사는 이제 수면 계산이 물결대로 그린다(뒤집어 다시 그리던 그림 반사는 뺐다, 11-03)
     gl.uniform1f(dropU.uMir, 0);
+    gl.uniform1f(dropU.uCull, GL_CAR ? 1 : 0);                    // 차량판만 먼 물방울 계산 건너뛰기(웹은 예전 그대로)
     // 겹: 거리가 확실히 다른 물방울은 먼 겹부터 따로 그리고, 그 결과를 다음 겹이 비춰 본다. 앞 물방울 속으로 뒤 물방울이 보인다(11-04 광호님).
     // 거리가 비슷한 것끼리는 한 겹에서 액체처럼 이어진다. 겹은 최대 셋(화면을 다시 복사하는 비용)
     const gaps = [];
@@ -2181,7 +2212,17 @@
       const lo = li < cuts.length ? cuts[li] : 0;
       layD.fill(0); layE.fill(0); layB.fill(0); layZ.fill(1);
       for (let i = lo; i < hi; i++) { layD.set(dropBuf.subarray(i * 4, i * 4 + 4), i * 4); layE.set(dropEx.subarray(i * 4, i * 4 + 4), i * 4); layB.set(dropBand.subarray(i * 4, i * 4 + 4), i * 4); layZ[i] = dropZ[i]; }
-      if (li > 0) { gl.activeTexture(gl.TEXTURE1); gl.copyTexSubImage2D(gl.TEXTURE_2D, 0, cx0, cy0, cx0, cy0, cx1 - cx0, cy1 - cy0); gl.activeTexture(gl.TEXTURE0); }   // 뒤 겹이 그려진 화면을 다시 담는다
+      if (GL_CAR) {
+        // 11-09 플레오스 최적화(차량판만): 겹마다 물방울 전체를 감싼 큰 사각형 대신 「이 겹 물방울들의 둘레」만 화면을 담고(굴절 여유 m 은 같게) 그 안만 그린다.
+        //   녹턴처럼 물방울이 가로로 흩어져 있으면 겹마다 넓은 띠를 통째로 복사·계산하던 것을 크게 줄인다. 결과는 같다
+        let a = 1e9, b = 1e9, c = -1e9, d = -1e9;
+        for (let i = lo; i < hi; i++) { const rp = dropBuf[i * 4 + 2]; if (rp <= 0) continue; const px = dropBuf[i * 4], py = dropBuf[i * 4 + 1]; a = Math.min(a, px - rp * 1.8); c = Math.max(c, px + rp * 1.8); b = Math.min(b, py - rp * 1.8); d = Math.max(d, py + rp * 1.8); }
+        if (c > a && d > b) {
+          const qx0 = ix(a - m, W0), qy0 = ix(b - m, H0), qx1 = ix(c + m, W0), qy1 = ix(d + m, H0), sx0 = ix(a - 4, W0), sy0 = ix(b - 4, H0), sx1 = ix(c + 4, W0), sy1 = ix(d + 4, H0);
+          if (qx1 > qx0 && qy1 > qy0) { gl.activeTexture(gl.TEXTURE1); gl.copyTexSubImage2D(gl.TEXTURE_2D, 0, qx0, qy0, qx0, qy0, qx1 - qx0, qy1 - qy0); gl.activeTexture(gl.TEXTURE0); }
+          gl.scissor(sx0, sy0, Math.max(0, sx1 - sx0), Math.max(0, sy1 - sy0));
+        } else gl.scissor(0, 0, 0, 0);
+      } else if (li > 0) { gl.activeTexture(gl.TEXTURE1); gl.copyTexSubImage2D(gl.TEXTURE_2D, 0, cx0, cy0, cx0, cy0, cx1 - cx0, cy1 - cy0); gl.activeTexture(gl.TEXTURE0); }   // 뒤 겹이 그려진 화면을 다시 담는다
       gl.uniform4fv(dropU.uD, layD); gl.uniform4fv(dropU.uE, layE); gl.uniform4fv(dropU.uB, layB); gl.uniform1fv(dropU.uZ, layZ);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
       hi = lo;
@@ -2582,10 +2623,13 @@
       if (sum > 0.3) mood.cent += (cw / sum / (NB - 1) - mood.cent) * k(5);
       mood.flux += (mu.flux - mood.flux) * k(4);
       mood.tick += dt;
-      if (mood.tick > 0.25 && moodAn) {                        // 조성은 네 번에 한 번이면 충분하다
-        mood.tick = 0;
+      // 11-09 플레오스 최적화(차량판 주행 중 화면 쉼만): 큰 분석(8192)을 초당 4번 → 1번. 조성 판정은 모양 비교라 쌓이는 크기와 무관하고,
+      //   잊는 빠르기는 지난 시간만큼 맞춘다(웹·정차는 예전 그대로)
+      const moodGap = car.hide ? 1 : 0.25;
+      if (mood.tick > moodGap && moodAn) {                     // 조성은 네 번에 한 번이면 충분하다
+        const moodEl = mood.tick; mood.tick = 0;
         moodAn.getByteFrequencyData(moodBuf);
-        const hz = actx.sampleRate / moodAn.fftSize, keep = Math.exp(-0.25 / 7);
+        const hz = actx.sampleRate / moodAn.fftSize, keep = car.hide ? Math.exp(-moodEl / 7) : Math.exp(-0.25 / 7);
         for (let i = 0; i < 12; i++) mood.chroma[i] *= keep;
         for (let j = Math.ceil(180 / hz); j < 2400 / hz; j++) {
           const v = moodBuf[j] / 255, pc = ((Math.round(12 * Math.log2(j * hz / 440)) % 12) + 12) % 12;
@@ -3228,9 +3272,13 @@
   let last = performance.now(), t0 = last, tStart = last, hudT = 0, simPrev = 0;
   // 11-09 플레오스 최적화(기준 칩 퀄컴 SA8295P): 차량판은 초당 30장. 웹은 그대로(제한 없음). ?fps=N 으로 바꿀 수 있다
   const FPS_CAP = qp0.has('fps') ? +qp0.get('fps') : (CAR_MODE ? 30 : 0), FRAME_MS = FPS_CAP ? 1000 / FPS_CAP : 0;
+  const FPS_DBG = qp0.has('fpsdbg') ? (window.__fps = { n: 0, slow: 0, max: 0 }) : null;
   function frame(now) {
-    if (car.hide && now - last < 100) { requestAnimationFrame(frame); return; }   // 주행 중은 소리 분석과 무드등만: 초당 10번이면 충분하다(플레오스 CPU 5% 기준)
+    // 주행 중은 소리 분석과 무드등만: 초당 10번이면 충분하다(플레오스 CPU 5% 기준).
+    //   11-09: 화면 주기(초당 60번)마다 깨어나 시간만 보고 돌아가던 것을, 다음 차례까지 잠들었다가 깨어나게(타이머)
+    if (car.hide && now - last < 100) { setTimeout(() => requestAnimationFrame(frame), Math.max(0, 96 - (now - last))); return; }
     if (FRAME_MS && now - last < FRAME_MS - 2) { requestAnimationFrame(frame); return; }   // 화면 주기(60Hz)의 절반마다 한 장
+    if (FPS_DBG) { FPS_DBG.n++; const g = now - last; if (g > 50) FPS_DBG.slow++; FPS_DBG.max = Math.max(FPS_DBG.max, g); }   // 시험용(&fpsdbg): 실제로 그린 장수·50ms 넘은 장(끊김)
     const dt = Math.min(car.hide ? 0.2 : 0.05, (now - last) / 1000); last = now;
     // 세계의 시계: 저절로 흐르지 않는다. 차가 달리거나 소리가 들릴 때만 그만큼 흐른다
     const soundOn = analyser && (micOn || !audio.paused) ? (micOn ? mu.gate : 1) : 0;
@@ -3302,7 +3350,7 @@
     if (car.on) {
       if (car.turn) { car.turnT -= dt; if (car.turnT <= 0) { car.turnT = 0.75; addRipple(car.turn * 2.6, 3.4, 0.14); } } else car.turnT = 0;   // 방향지시등 박자로 그쪽 물에 파문
       const hide = !qp0.has('demo') && car.gear !== 'P' && (car.on ? car.kmh : st.kmh) > 3;   // 심사 규정: 주행 중 화면 숨김. 차량판은 실제 차속으로(녹턴의 가상 흐름 속도와 섞지 않는다)
-      if (hide !== car.hide) { car.hide = hide; $('driveHold').classList.toggle('hide', !hide); }
+      if (hide !== car.hide) { car.hide = hide; window.vecCarHide = hide; $('driveHold').classList.toggle('hide', !hide); }
       car.ambT -= dt;
       if (car.ambT <= 0 && window.VecNative?.setAmbient) {        // 무드등: 공간의 색과 저음 맥박을 차 실내로 잇는다
         car.ambT = 0.12;
@@ -4061,7 +4109,11 @@ void main(){
       const itemY = li => { const r = li.querySelector('b').getBoundingClientRect(); return (r.top + r.height / 2 - mr.top - oy) / s; };
       const ss = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
       function draw(now) {
-        if (!alive) return; requestAnimationFrame(draw);
+        if (!alive) return;
+        // 11-09 플레오스 최적화(차량판만): 메뉴를 고르고 메뉴가 닫힌 뒤에는 이 빛 루프를 멈춘다(빈 루프도 매 장 화면 갱신을 요청해 크롬 전체가 초당 60번 돈다).
+        //   메뉴로 돌아갈 때는 페이지를 새로 연다(toMenu). 웹은 예전 그대로
+        if (GL_CAR && picked && !m.classList.contains('on')) { alive = false; return; }
+        requestAnimationFrame(draw);
         const dt = Math.min(0.05, (now - L.last) / 1000), T = (now - L.t0) / 1000; L.last = now;
         if (!m.classList.contains('on')) return;
         fit();
