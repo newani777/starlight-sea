@@ -3080,18 +3080,28 @@
       const qx = Math.tan(rel), qy = Math.tan(al) / Math.cos(rel); out[i * 2] = cx + (rc * qx + rs * qy) * H; out[i * 2 + 1] = cy - (-rs * qx + rc * qy) * H; return true; };
     // 11-05 광호님 「마스크에 가려지는 것처럼 사라지는 부분」: 예전에는 모든 물방울 자리(흐려지는·안 보이는 것까지)를 딱딱한 타원으로 오려 냈다.
     //   이제는 별가루와 똑같이, 또렷한 물방울(불투명도 0.3 이상, dropCutM) 둘레만 0.88~1.18 반지름에서 부드럽게 지운다. 그래서 별자리는 따로 한 판에 그린 뒤 합친다
-    if (skyL.width !== cv.width || skyL.height !== cv.height) { skyL.width = cv.width; skyL.height = cv.height; }
+    if (skyL.width !== cv.width || skyL.height !== cv.height) { skyL.width = cv.width; skyL.height = cv.height; sky.drawn = 0; }
+    // 11-09 플레오스 에뮬레이터 끊김의 실제 원인(층을 하나씩 꺼 보며 확인): 별자리가 한 장마다 작은 그리기 약 450번(꼭짓점 빛무리 154·심 154·선 146).
+    //   차량판은 시점이 지난번 그린 뒤로 거의 안 움직였으면(1화소 안쪽) 0.1초 동안 다시 그리지 않고 지난 판을 그대로 합친다. 움직이면 바로 다시 그린다.
+    //   반짝임(초당 1번 안팎의 느린 숨)과 박 반짝임은 초당 10번이면 충분하다. 웹은 예전 그대로 매 장
+    if (CAR_MODE && sky.drawn && now - sky.drawn < 100 && Math.abs(wrap(view - sky.dv)) * H < 1 && Math.abs(st.roll - sky.dr) * H < 1 && Math.abs(sky.a - sky.da) < 0.02) {
+      ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalCompositeOperation = 'lighter'; ctx.drawImage(skyL, 0, 0); ctx.restore();
+      return;
+    }
+    sky.drawn = now; sky.dv = view; sky.dr = st.roll; sky.da = sky.a;
     const g = skyG; g.setTransform(1, 0, 0, 1, 0, 0); g.globalCompositeOperation = 'source-over'; g.clearRect(0, 0, skyL.width, skyL.height);
     g.save(); g.setTransform(DPR, 0, 0, DPR, 0, 0); g.globalCompositeOperation = 'lighter';
     g.lineWidth = 1 / DPR * Math.max(1, DPR * 0.75); g.lineCap = 'round';
     const starRgb = pal.hi.map(v => lerp(v, 255, 0.25)), spr = sprite(starRgb), lineCss = pal.hi.map(v => Math.round(lerp(v, 197, 0.5))).join(','), coreCss = 'rgb(' + pal.hi.map(v => Math.round(lerp(v, 255, 0.7))).join(',') + ')';
     const pulse = mOn * (mu.hiBeat || 0) * 0.25;
+    const lineBin = CAR_MODE ? [] : null, coreBin = CAR_MODE ? [] : null;   // 차량판: 선은 밝기 10단계, 심은 8단계로 묶어 한 번에
     for (const c of sky.C) {
       for (let i = 0; i < c.V.length; i++) c.vis[i] = proj(c.al[i], c.az[i], c.px, i) ? 1 : 0;
       for (const sg of c.segs) for (let k = 1; k < sg.length; k++) {   // 선: 1px 머리카락 선을 옅게
         const a = sg[k - 1], b = sg[k]; if (!c.vis[a] || !c.vis[b]) continue;
         const al = (0.026 + 0.064 * Math.min(face(c.az[a]), face(c.az[b]))) * Math.min(   // 11-05 광호님 「라인을 더 약하게」: 0.045+0.11 → 약 40% 낮춤
           smooth01(-0.01, 0.07, c.al[a]), smooth01(-0.01, 0.07, c.al[b])) * sky.a;
+        if (lineBin) { const k = Math.min(9, Math.round(al / 0.1 * 9)); if (k > 0) { const P = lineBin[k] || (lineBin[k] = new Path2D()); P.moveTo(c.px[a * 2], c.px[a * 2 + 1]); P.lineTo(c.px[b * 2], c.px[b * 2 + 1]); } continue; }
         g.strokeStyle = `rgba(${lineCss},${al.toFixed(3)})`; g.beginPath(); g.moveTo(c.px[a * 2], c.px[a * 2 + 1]); g.lineTo(c.px[b * 2], c.px[b * 2 + 1]); g.stroke();
       }
       for (let i = 0; i < c.V.length; i++) {                      // 별: 하늘의 별가루와 같은 별. 여러 선이 만나는 별은 조금 크다
@@ -3102,8 +3112,16 @@
         // 11-05 광호님 「라인은 건들지 말고 꼭짓점 별의 밝기는 더 선명하고 밝게」: 번짐 별은 0.68 → 1.0 배로 밝히고, 가운데에 또렷한 심(작은 점)을 하나 더 찍는다
         const sa = Math.min(1, (0.62 + 0.38 * f) * smooth01(-0.01, 0.07, c.al[i]) * tw * sky.a) * 0.84;   // 11-05 광호님 「꼭짓점 별 밝기를 조금만 낮춰」 → 0.84 배
         g.globalAlpha = sa * 0.4; g.drawImage(spr, x - d / 2, y - d / 2, d, d);   // 11-05 광호님 「꼭짓점 별의 글로우를 60% 줄여」: 번짐만 0.4 배, 가운데 심은 그대로
+        if (coreBin) { const k = Math.min(7, Math.round(sa * 0.8 * 7)); if (k > 0) { const P = coreBin[k] || (coreBin[k] = new Path2D()), cr = Math.max(0.55, r * 0.34); P.moveTo(x + cr, y); P.arc(x, y, cr, 0, 6.2832); } continue; }
         g.globalAlpha = sa * 0.8; g.fillStyle = coreCss; g.beginPath(); g.arc(x, y, Math.max(0.55, r * 0.34), 0, 6.2832); g.fill();
       }
+      g.globalAlpha = 1;
+    }
+    if (lineBin) {
+      g.globalAlpha = 1;
+      for (let k = 1; k < lineBin.length; k++) if (lineBin[k]) { g.strokeStyle = `rgba(${lineCss},${(k / 9 * 0.1).toFixed(3)})`; g.stroke(lineBin[k]); }
+      g.fillStyle = coreCss;
+      for (let k = 1; k < coreBin.length; k++) if (coreBin[k]) { g.globalAlpha = k / 7; g.fill(coreBin[k]); }
       g.globalAlpha = 1;
     }
     if (qp0.has('debug')) {                                       // 시험: 내비 진행 방위·시선 방위·화면 가운데 별자리 방위(도, 북 0 시계 방향)
