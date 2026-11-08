@@ -2318,6 +2318,12 @@
   }
   const N = 554, FAR = 1200, NEAR = 3, SPREAD = 900;
   const stars = [];
+  // 11-09 차량판: 이보다 먼 별은 고정(소리에 반짝임만), 가까운 별만 다가오고 다시 생긴다. 화면에서 반지름 1화소 안팎이 되는 거리
+  const STAR_NEAR = +(new URLSearchParams(location.search).get('starnear') || 300);
+  function spawnNear(s) {                                        // 웹은 예전 그대로 먼 곳에서, 차량판은 경계에서 새로 난다
+    spawn(s, false);
+    if (s.far !== undefined) { s.far = false; s.z = STAR_NEAR * (0.85 + Math.random() * 0.15); s.age = 0; }
+  }
   function spawn(s, anyDepth) {
     s.x = (Math.random() * 2 - 1) * SPREAD;
     s.y = (Math.random() * 2 - 1) * SPREAD;
@@ -3628,15 +3634,40 @@
     const streak = Math.min(1, st.kmh / 100);
     const vis = pal.stars;
     ctx.lineCap = 'round';
+    // 11-09 광호님 「모든 별이 파티클로 새로 생기며 반짝여 무겁다. 먼 별은 고정하고 사운드에 반응해 반짝이게, 가까이 다가온 별만 지금처럼」(차량판만):
+    //   먼 별(STAR_NEAR 보다 먼 것, 화면에서 1화소 안팎의 점)은 다가오지도 다시 생기지도 않고 시점이 도는 만큼만 돈다.
+    //   하나씩 그리던 빛 그림(drawImage 수백 번) 대신 색 3 × 밝기 6 단계로 묶어 한 번에 칠한다(최대 18번).
+    //   가까운 별은 예전처럼 다가오고, 경계에서 새로 생겨 1.2초에 걸쳐 나타난다. ?starnear=N 으로 경계를 바꿔 볼 수 있다
+    const farBins = CAR_MODE ? [] : null;
     for (const s of stars) {
+      if (farBins) {
+        if (s.far === undefined) { s.far = s.z > STAR_NEAR; const q = Math.random(); s.ci = q < 0.45 ? 0 : q < 0.75 ? 1 : 2; s.age = 9; }
+        if (s.far) {
+          const x = s.x * cs + s.z * sn, z = -s.x * sn + s.z * cs; s.x = x; s.z = z;
+          if (s.z < STAR_NEAR * 0.8) { s.z = STAR_NEAR + Math.random() * (FAR - STAR_NEAR); s.x = (Math.random() * 2 - 1) * SPREAD; }   // 시점이 크게 돌아 뒤로 간 별은 먼 하늘에 다시 놓는다
+          const sx = s.x / s.z * F, sy = s.y / s.z * F;
+          if (Math.abs(sx) > edge) { s.x = -s.x * 0.98; continue; }
+          if (Math.abs(sy) > edge) continue;
+          const fade = Math.min(1, (FAR - s.z) / (FAR * 0.45) + 0.25) * (sy > 0 ? 0.35 : 1) * vis * smooth01(1.2 * (st.sunR || 0.03) * H, 2.6 * (st.sunR || 0.03) * H, Math.hypot(sx - sunNow * H, sy + 0.035 * H)) * dropHide(cx + sx * Math.cos(st.roll) - sy * Math.sin(st.roll), cy + sx * Math.sin(st.roll) + sy * Math.cos(st.roll));
+          if (fade < 0.02) continue;
+          // 소리에 반짝인다: 존재감(pres)이 클수록 빨리 숨 쉬고, 고음 박에 함께 반짝 켜진다(별마다 박자에 실리는 정도가 다르다)
+          const tw = 0.68 + 0.32 * Math.sin(T * (0.9 + st.flash * 2 + mOn * mu.pres * 3) + s.tw) + mOn * (mu.hiBeat * (0.25 + 0.3 * Math.sin(s.tw * 7) ** 2) + mu.pres * 0.12);
+          const a = Math.min(1, fade * tw * (1 + st.flash * 0.3)) * 0.85;
+          if (a < 0.03) continue;
+          const k = s.ci * 6 + Math.min(5, (a * 6) | 0), hs = 0.62 * (1 + st.flash * 0.15);
+          (farBins[k] || (farBins[k] = new Path2D())).rect(sx - hs, sy - hs, hs * 2, hs * 2);
+          continue;
+        }
+        s.age = (s.age || 0) + dt;
+      }
       s.z -= fwd * vz; s.x -= fwd * vx;
       const x = s.x * cs + s.z * sn, z = -s.x * sn + s.z * cs; s.x = x; s.z = z;
-      if (s.z < NEAR || s.z > FAR * 1.05) { spawn(s, false); continue; }
+      if (s.z < NEAR || s.z > FAR * 1.05) { spawnNear(s); continue; }
       const sx = s.x / s.z * F, sy = s.y / s.z * F;
       if (Math.abs(sx) > edge) { s.x = -s.x * 0.98; s.px = null; continue; }
-      if (Math.abs(sy) > edge) { spawn(s, false); continue; }
+      if (Math.abs(sy) > edge) { spawnNear(s); continue; }
 
-      const fade = Math.min(1, (FAR - s.z) / (FAR * 0.45)) * (sy > 0 ? 0.35 : 1) * vis * smooth01(1.2 * (st.sunR || 0.03) * H, 2.6 * (st.sunR || 0.03) * H, Math.hypot(sx - sunNow * H, sy + 0.035 * H)) * dropHide(cx + sx * Math.cos(st.roll) - sy * Math.sin(st.roll), cy + sx * Math.sin(st.roll) + sy * Math.cos(st.roll));   // 물방울 뒤의 하늘 별도 감춘다(물방울은 휜 하늘을 비춘다)   // 목적지 별 몸체 뒤의 별은 가려진다(11-04 광호님)
+      const fade = Math.min(1, (FAR - s.z) / (FAR * 0.45)) * (sy > 0 ? 0.35 : 1) * vis * smooth01(1.2 * (st.sunR || 0.03) * H, 2.6 * (st.sunR || 0.03) * H, Math.hypot(sx - sunNow * H, sy + 0.035 * H)) * dropHide(cx + sx * Math.cos(st.roll) - sy * Math.sin(st.roll), cy + sx * Math.sin(st.roll) + sy * Math.cos(st.roll)) * (farBins ? Math.min(1, s.age / 1.2) : 1);   // 차량판: 경계에서 새로 난 가까운 별은 1.2초에 걸쳐 나타난다   // 물방울 뒤의 하늘 별도 감춘다(물방울은 휜 하늘을 비춘다)   // 목적지 별 몸체 뒤의 별은 가려진다(11-04 광호님)
       const twinkle = 0.8 + 0.2 * Math.sin(T * (0.9 + st.flash * 2 + mOn * mu.pres * 3) + s.tw) + mOn * mu.hiBeat * 0.25;
       const r = Math.max(0.5, Math.min(3.5, s.s * 98 / s.z)) * (1 + st.flash * 0.15);   // 크기 30% 줄임(11-04 광호님)
 
@@ -3655,6 +3686,12 @@
       ctx.drawImage(sprite(s.rgb), sx - d / 2, sy - d / 2, d, d);
       ctx.globalAlpha = 1;
       s.px = sx; s.py = sy;
+    }
+    if (farBins) {                                               // 먼 별: 색·밝기 단계별로 한 번에 칠한다
+      const base = [pal.hi, CREAM, pal.glow];
+      for (let k = 0; k < farBins.length; k++) { const P = farBins[k]; if (!P) continue;
+        ctx.fillStyle = `rgb(${base[(k / 6) | 0].map(v => Math.round(lerp(v, 255, 0.25))).join(',')})`; ctx.globalAlpha = ((k % 6) + 0.5) / 6 * 0.8; ctx.fill(P); }
+      ctx.globalAlpha = 1;
     }
 
     // 우리가 움직인 만큼 세계에 놓인 것들이 다가오고 돈다
