@@ -26,9 +26,18 @@
   #start h1{margin:0;font-weight:300;font-size:30px;letter-spacing:.32em;padding-left:.32em}
   #start p{margin:0;color:var(--dim);font-size:13px;line-height:1.8;max-width:300px;font-weight:300}
   /* 11-09 광호님 「플레오스 버전 메뉴의 폰트 크기를 약간만 줄여줘」: 차량판만 메뉴 글자를 약 12% 작게. 웹 시험판은 그대로 */
-  html.car #menu h1{font-size:max(25px,6.3cqh)} html.car #menu .mEn{font-size:max(9px,1.32cqh)} html.car #menu .mDesc{font-size:max(11px,1.67cqh)}
-  html.car #menu .mList b{font-size:max(18px,3.25cqh)} html.car #menu .mList .ko{font-size:max(11px,1.54cqh)} html.car #menu .mList .ds{font-size:max(10px,1.36cqh)}
-  html.car #menu .mKick{font-size:max(8px,1.06cqh)} html.car #menu .mTag, html.car #menu .mHint{font-size:max(8px,.97cqh)}
+  /*   11-09 광호님 「메인메뉴 폰트 크기를 조금 더 줄여줘」: 한 번 더 약 10%(처음 대비 약 79%) */
+  html.car #menu h1{font-size:max(23px,5.7cqh)} html.car #menu .mEn{font-size:max(8px,1.2cqh)} html.car #menu .mDesc{font-size:max(10px,1.5cqh)}
+  html.car #menu .mList b{font-size:max(16px,2.9cqh)} html.car #menu .mList .ko{font-size:max(10px,1.4cqh)} html.car #menu .mList .ds{font-size:max(9px,1.24cqh)}
+  html.car #menu .mKick{font-size:max(8px,.96cqh)} html.car #menu .mTag, html.car #menu .mHint{font-size:max(8px,.88cqh)}
+  /* 11-09 광호님 「플레오스는 터치라 드래그가 없다 → 메뉴가 계속 떠 있어야」: 차량판 막대는 늘 보이고, 손가락으로 누르기 좋게 위아래 여백을 키운다.
+     화면 비율(앱 창 약 1.39:1)에 맞춰 무드 줄은 한 줄을 통째로 쓰고(아틀리에), 나머지(소리·곡·보기·메뉴)는 그 아래 한 줄에 양끝 정렬 */
+  html.car #dock{height:auto;bottom:2.2cqh;flex-wrap:wrap;row-gap:.6cqh;column-gap:2.4cqw}
+  html.car #dock button{padding:1.5cqh .5cqw;font-size:max(12px,1.7cqh)}
+  html.car #dock #dSong{max-width:24cqw}
+  html.car #dock #dMood{order:-1;flex-basis:100%;flex-wrap:wrap;column-gap:1.6cqw;row-gap:0}
+  html.car #dockShade{height:15cqh} html.car.dock2 #dockShade{height:24cqh}
+  html.car #guide{bottom:max(18px,11cqh)} html.car #gSpd{bottom:calc(max(18px,11cqh) + max(10px,2cqh) + 1px)}
   html.car #start p{max-width:420px;word-break:keep-all}   /* 11-09 차량판만: 플레오스 창에서 낱말 중간 줄바꿈 없게. 웹 시험판은 그대로 */
   button{font:inherit;color:var(--ink);background:rgba(255,230,220,.08);border:1px solid var(--line);border-radius:999px;padding:9px 15px;font-size:12px;font-weight:300;letter-spacing:.04em;cursor:pointer;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
   button.on{background:rgba(255,170,150,.22);border-color:rgba(255,200,185,.45)}
@@ -1838,7 +1847,7 @@
   //   시점: 좌우는 31초·13초 물결(최대 약 8.9°), 위아래는 11초(숨 한 번)·27초 물결(최대 약 4.2°, 11-08 5% 크게). 첫 14초에 걸쳐 서서히 깨어난다
   //   물방울: 차 흐름 대신 녹턴 전용. 앞 50~72m 에서 생겨나 정면 쪽(옆으로 1.2~5.5m)에서 다가오고, 가까워지면 옆으로 살짝 비켜 지나간다. 화면에 4~5개
   const noct = { on: false, t: 0, yawPrev: 0, drops: [], seq: 0, spawnT: 0, side: 1 };
-  const NOCT_N = 5, deg2r = Math.PI / 180, TAU = Math.PI * 2;
+  const NOCT_N = qp0.has('car') ? 4 : 5, deg2r = Math.PI / 180, TAU = Math.PI * 2;
   // 기본 화면(11-08 광호님 「카메라 전면 디폴트 위치는 하늘 6 : 바다 4」): 수평선 높이 cy = H×0.5 + tan(시선)×H×0.62 → 위에서 60% 자리 = 시선 약 9.2° 위
   const NOCT_PITCH = Math.atan(0.1 / 0.62);
   const NOCT_VMIN = 3, NOCT_VMAX = 11;                              // 시속(km)
@@ -1863,7 +1872,7 @@
     noct.seq = (noct.seq + 1) % 4000;                             // 11-08 광호님 「물방울이 깨져」: 번호가 물방울 모양 일렁임의 위상(번호×1.7·2.9·4.3)이 되는데, 500만부터 매겨 그래픽 계산의 소수 정밀도가 무너져 윤곽이 각지게 조각났다 → 작은 번호(900~4899)
     noct.drops.push({ id: 900 + noct.seq, kind, x: noct.side * (1.2 + Math.random() * 4.3), s: sAt, v: 0.2 + Math.random() * 0.3 });
   }
-  function noctDropsReset() { noct.drops.length = 0; for (const s0 of [16, 29, 41, 54]) noctSpawn(s0); noct.spawnT = 0; }
+  function noctDropsReset() { noct.drops.length = 0; for (const s0 of (CAR_MODE ? [18, 35, 52] : [16, 29, 41, 54])) noctSpawn(s0); noct.spawnT = 0; }   // 차량판은 처음 3개(11-09 20% 적게)
   function noctDrops(dt) {
     const ego = st.kmh / 3.6;
     for (const d of noct.drops) {
@@ -1873,7 +1882,7 @@
     noct.drops = noct.drops.filter(d => d.s > -6);
     noct.spawnT -= dt;
     const ahead = noct.drops.filter(d => d.s > 0).length;
-    if (ahead < NOCT_N && noct.spawnT <= 0) { noctSpawn(50 + Math.random() * 22); noct.spawnT = 2 + Math.random() * 1.5; }   // 앞의 물방울이 5개보다 적으면 2~3.5초마다 하나씩
+    if (ahead < NOCT_N && noct.spawnT <= 0) { noctSpawn(50 + Math.random() * 22); noct.spawnT = (2 + Math.random() * 1.5) * (CAR_MODE ? 1.25 : 1); }   // 앞의 물방울이 5개보다 적으면 2~3.5초마다 하나씩
   }
   function surroundList() {
     const out = [];
@@ -2142,7 +2151,7 @@
       //   가까워지면 옅어지는 규칙이 옆으로 비켜 지나가는 물방울에도 걸려, 화면 밖으로 나가기 전에 앞에서 사라졌다 → 옆으로 비킨 물방울(화면 가운데에서 먼 것)은 옅어지지 않고 화면 밖으로 지나간다
       const sideK = smooth01(0.45, 0.9, Math.abs(lx) / Math.max(lz, 1e-3));
       if (lz < 0.12) continue;                                     // 가운데에 가까운 것은 아래에서 옅어지고, 옆으로 비킨 것은 화면 밖까지 그대로
-      const r = DROP_R[o.kind] * MV * (0.8 + 0.2 * smooth01(16, 4.05, lz)), y = 0.3 + swell(st.posX + o.ox, st.posZ + o.oz, TW, bass) * 0.6;   // 수면 위 눈높이(CAMH)에 떠서 너울을 조금만 탄다
+      const r = DROP_R[o.kind] * MV * (0.8 + 0.2 * smooth01(16, 4.05, lz)) * (CAR_MODE ? 0.9 : 1), y = 0.3 + swell(st.posX + o.ox, st.posZ + o.oz, TW, bass) * 0.6;   // 수면 위 눈높이(CAMH)에 떠서 너울을 조금만 탄다
       const qx = lx / lz, qy = (y - 0.3) / lz;
       const sx = cx + (rc * qx + rs * qy) * H, sy = cy - (-rs * qx + rc * qy) * H;
       const rr = r / lz * H, rs0 = rr / (1 + rr / (0.75 * H)) * (1 + 0.03 * dropPulse * smooth01(27, 20, lz)), alpha0 = o.a * lerp(smooth01(0.35, 0.8, lz), 1, sideK) * smooth01(2.5, 5, rs0 * 2);   // 작은 물방울도 오래 반투명하게 머물지 않는다   // 가까워질수록 계속 커지며(크기가 멈추면 카메라에 붙은 것처럼 보였다) 옆으로 화면 밖까지 나간다. 흐려지는 건 이미 화면을 벗어난 뒤(11-04 광호님)
@@ -2838,7 +2847,11 @@
     return slope.cur;
   }
   function rsimStart() {
-    if (CAR_MODE || qp0.get('route') === '0' || !rsim.X && !rsimBuild()) return;
+    // 11-09 광호님 「그랜드 보야지에서 네비 이미지가 나와야 해」: 플레오스 SDK(Vehicle 2.3.2)에는 내비 안내 API 가 없다.
+    //   차량판 그랜드 보야주도 웹과 같은 경로 프로그램(광화문 → 현대자동차 본사, 갈림목 안내 포함)으로 달리고 안내판을 띄운다.
+    //   차가 서 있을 때(P 또는 시속 3km 미만)만 이 길을 스스로 달리고, 실제로 달리면 규정대로 화면이 쉰다. 물방울도 같은 프로그램의 도로 흐름(가상 차)으로
+    if ((CAR_MODE && MODE.name !== 'voyage') || qp0.get('route') === '0' || !rsim.X && !rsimBuild()) return;
+    if (CAR_MODE) { traffic.on = true; live.on = false; }
     Object.assign(rsim, { on: true, s: 0, t: 0, manual: 0, lastB: null, done: false, K: st.travel - rsimAng(2) });
     pc.v = 0; route.draw = 0;
   }
@@ -3395,7 +3408,8 @@
       const coast = v0 > 0.05 ? (1 - pc.th) * 0.75 + 0.0005 * v0 * v0 : 0;
       pc.v = Math.max(0, v0 + (push - stop - coast) * dt);
       }
-      if (rsim.on && !car.on) rsimSpeed(dt, K, v0);
+      const voyCarStill = rsim.on && car.on && (car.gear === 'P' || car.kmh < 3);   // 차량판 그랜드 보야주: 서 있는 동안 경로 프로그램이 달린다
+      if (rsim.on && (!car.on || voyCarStill)) rsimSpeed(dt, K, v0);
       // 11-09 광호님 「플레오스판에도 녹턴(음악 감상용 비주얼라이제이션)」: 차가 서 있으면(기어 P 또는 시속 3km 미만) 웹 녹턴과 같이
       //   느린 흐름·시선 숨쉬기로 바다를 펼친다. 달리면 화면은 쉬고(car.hide), 다시 서면 녹턴으로 돌아온다
       const noctCarStill = noct.on && car.on && (car.gear === 'P' || car.kmh < 3);
@@ -3404,8 +3418,8 @@
       pc.steer += ((K.l ? 1 : 0) - (K.r ? 1 : 0) - pc.steer) * k(0.16);
       pc.yaw = car.on ? pc.v * Math.tan(car.steer * Math.PI / 180 / STEER_RATIO) / WHEELBASE : pc.steer * Math.min(pc.v / 6, 5.5 / Math.max(pc.v, 1));   // 저속은 회전 반경 6m, 고속은 쏠림 한계
       if (noct.on && (!car.on || noctCarStill)) { pc.yaw = 0; noctLook(); }
-      if (rsim.on && !car.on && MODE.name === 'voyage') voyLook(dt);   // 그랜드 보야주: 직선에서 녹턴의 절반 크기로 시선이 흐른다
-      if (rsim.on && !car.on) pc.yaw = rsimYaw(dt);              // 핸들은 길을 따라 스스로
+      if (rsim.on && (!car.on || voyCarStill) && MODE.name === 'voyage') voyLook(dt);   // 그랜드 보야주: 직선에서 녹턴의 절반 크기로 시선이 흐른다
+      if (rsim.on && (!car.on || voyCarStill)) pc.yaw = rsimYaw(dt);              // 핸들은 길을 따라 스스로
       st.kmh = pc.v * 3.6; st.accLong = pc.acc; st.latAcc = pc.v * pc.yaw;
       dHead = pc.yaw * dt + pc.look; pc.look = 0;
       st.yaw = pc.yaw * 180 / Math.PI;
@@ -4096,10 +4110,11 @@
       }
       if (MODE.name === 'nocturne') BIO_SCRIPT.splice(0, BIO_SCRIPT.length, [0, 0], [80, 1], [300, 2], [520, 1], [720, 0]);   // 11-08 광호님 「녹턴 첫 곡에서도 무드가 한 번 바뀌게」: 재즈 첫 곡(0~2:51) 1분 20초쯤 깊은 쉼 → 달빛 고요, 뒤로는 비취 밤 · 달빛 고요 · 깊은 쉼(설렘·긴장 없이 차분하게)
       if (MODE.name === 'nocturne' && audioOut) { const g = audioOut.gain, t = actx.currentTime; g.cancelScheduledValues(t); g.setValueAtTime(0, t); g.linearRampToValueAtTime(trackGain(), t + 6); }   // 11-08 광호님 「녹턴 시작할 때 사운드 시작 부분 페이드인」: 6초에 걸쳐 들어온다(암전이 걷히는 3.2초와 함께)
-      if (MODE.name === 'nocturne') { noct.on = true; noct.t = 0; noct.yawPrev = 0; noct.ph = Math.PI; noct.per = 25; noctDropsReset(); dockBuild(); return; }   // 녹턴: 경로·내비 없이 천천히 흘러간다
-      if (MODE.name === 'voyage') { dockBuild(); return; }        // 그랜드 보야주: 전 구간·전체 곡, 화면을 끌면 곡·메뉴 막대(11-07 광호님: 무드 고르기·내 음악은 빼고 아틀리에에만)
+      if (MODE.name === 'nocturne') { noct.on = true; noct.t = 0; noct.yawPrev = 0; noct.ph = Math.PI; noct.per = 25; noctDropsReset(); dockBuild(); if (CAR_MODE) showDock(); return; }   // 녹턴: 경로·내비 없이 천천히 흘러간다
+      if (MODE.name === 'voyage') { dockBuild(); if (CAR_MODE) showDock(); return; }        // 그랜드 보야주: 전 구간·전체 곡, 화면을 끌면 곡·메뉴 막대(11-07 광호님: 무드 고르기·내 음악은 빼고 아틀리에에만)
       if (MODE.name === 'atelier' && !ED_CAR) { $('keys').classList.add('on'); setTimeout(() => $('keys').classList.remove('on'), 14000); }   // 자유주행(차량 탑재판)은 키보드 안내 없음
       if (MODE.name === 'atelier' && ED_CAR) for (const id of ['bSim', 'bBump', 'bFlip', 'bLog']) $(id).classList.add('hide');   // 시험용 버튼은 숨긴다
+      if (MODE.name === 'atelier' && CAR_MODE) { dockBuild(); showDock(); }   // 11-09: 차량판 아틀리에도 막대(전부)
       if (!CAR_MODE || qp.has('debug')) { $('hud').classList.remove('hide'); $('bar').classList.remove('hide'); $('themes').classList.remove('hide'); }
       if (TOUCH) { $('pedals').classList.remove('hide'); goFull(); }
       return;
@@ -4317,8 +4332,9 @@ void main(){
   }
   function dockBuild() {
     if (dockBuild.done) return; dockBuild.done = true;              // 한 번만 만든다
-    $('dMood')?.remove(); $('dFile')?.remove();                     // 11-07 광호님 「그랜드 보야주에서 무드 고르기·내 음악은 빼자」: 무드는 감정 연동으로 저절로, 내 음악은 아틀리에(곡 바꾸기·끌어놓기)
-    const g = document.createElement('div');
+    const full = CAR_MODE && MODE.name === 'atelier';               // 11-09 광호님 「아뜰리에에 메뉴를 다 띄워줘」(차량판): 무드 고르기·보기 버튼까지
+    if (!full) $('dMood')?.remove(); $('dFile')?.remove();          // 내 음악 불러오기는 차량 앱에 파일 고르기 창이 없어 뺀다                     // 11-07 광호님 「그랜드 보야주에서 무드 고르기·내 음악은 빼자」: 무드는 감정 연동으로 저절로, 내 음악은 아틀리에(곡 바꾸기·끌어놓기)
+    const g = full ? $('dMood') : document.createElement('div');
     const add = (label, key, i, color) => { const b = document.createElement('button'); b.innerHTML = `<i></i>${label}`; b.dataset.k = key; b.dataset.i = i; b.style.setProperty('--c', color); b.style.setProperty('--d', (g.children.length * 0.035).toFixed(3) + 's');
       b.onclick = e => { e.stopPropagation(); if (key === 'auto') { bio.auto = true; const ti = THEMES.findIndex(t => t.key === BIO_STATES[bio.st].theme); if (ti >= 0) setTheme(ti, 4); } else { bio.auto = false; setTheme(i, 4); } dockSync(); dockPoke(); };
       g.append(b); };
@@ -4328,6 +4344,14 @@ void main(){
     $('dNext').onclick = e => { e.stopPropagation(); if (micOn) setMic(false); playSong(songI + 1); dockPoke(); };
     $('dSong').onclick = e => { e.stopPropagation(); if (micOn) setMic(false); playSong(songI + 1); dockPoke(); };
     if (PLAYLIST.length < 2) $('dNext').classList.add('hide');     // 녹턴 재즈는 한 곡(27분)
+    if (full) {
+      const v = document.createElement('div'); v.className = 'dGrp'; v.id = 'dView';
+      v.innerHTML = '<span class="dLbl">View</span><button id="dCal">시점 정면</button><button id="dSun">광원 정면</button>';
+      $('dMenu').parentElement.before(v);
+      $('dCal').onclick = e => { e.stopPropagation(); $('bCal').click(); };
+      $('dSun').onclick = e => { e.stopPropagation(); $('bReset').click(); };
+      document.documentElement.classList.add('dock2');
+    }
     if (MODE.name === 'nocturne') {                                // 11-08 광호님 「녹턴에서는 앱 음악과 기기 음악을 선택할 수 있게」
       const grp = document.createElement('div'); grp.className = 'dGrp'; grp.id = 'dSrc';
       grp.innerHTML = '<span class="dLbl">Sound</span><button id="dApp">앱 음악</button><button id="dDev">기기 소리</button>';
@@ -4357,7 +4381,7 @@ void main(){
     const n = $('fsNote'); n.innerHTML = msg + (sub ? '<small>' + sub + '</small>' : ''); n.classList.add('on'); clearTimeout(n.t); n.t = setTimeout(() => n.classList.remove('on'), 4200);
   }
   function showDock() { if (fin.on) return; dockOn = true; dockPoke(); dockSync(); $('dock').classList.add('on'); $('dockShade').classList.add('on'); }
-  function hideDock() { dockOn = false; $('dock').classList.remove('on'); $('dockShade').classList.remove('on'); }
+  function hideDock() { if (CAR_MODE && !fin.on) return; dockOn = false; $('dock').classList.remove('on'); $('dockShade').classList.remove('on'); }
   let dockMouse = false;
   setInterval(() => { if (dockOn && !dockMouse && performance.now() - dockT > 9000) hideDock(); }, 1000);   // 터치는 9초 동안 손대지 않으면 물러난다. 마우스는 화면 밖으로 나갈 때만(11-08)   // 9초 동안 손대지 않아도 조용히 물러난다
   // ───── 내 음악: 파일을 고르거나 화면에 끌어다 놓으면 그 곡으로 달린다(분석·물고기·무드 반응이 그 곡에 맞춰 다시 잡힌다) ─────
