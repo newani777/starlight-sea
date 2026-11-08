@@ -9,6 +9,8 @@
     <!-- Vehicle SDK: 기어·핸들·브레이크 페달 / 방향지시등·무드등 / 문 -->
     <uses-permission android:name="pleos.car.permission.CAR_DRIVE" />
     <uses-permission android:name="pleos.car.permission.CAR_LIGHTS" />
+    <!-- 무드등 색·밝기 쓰기(set). 11-09 에뮬레이터: CAR_LIGHTS 만으로는 setAmbientLight* 가 「need Permission」 -->
+    <uses-permission android:name="pleos.car.permission.CONTROL_CAR_LIGHTS" />
     <uses-permission android:name="pleos.car.permission.CAR_DOORS" />
     <!-- 바깥 재생기 연결점(NowPlayingWatch, 공모전판은 꺼짐): 다른 앱의 재생 곡 정보를 읽으려면 시스템 권한이 필요하다. 현대와 진행하게 되면 아래를 켠다
     <uses-permission android:name="android.permission.MEDIA_CONTENT_CONTROL" /> -->

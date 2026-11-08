@@ -268,7 +268,8 @@
   const disp = $('c'), dctx = disp.getContext('2d');
   const cv = document.createElement('canvas'), ctx = cv.getContext('2d');
   const gcv = $('g');
-  const gl = gcv.getContext('webgl', { antialias: false, alpha: false });
+  // WebGL1 이 막힌 기기(11-09 Pleos Connect 에뮬레이터 웹뷰: "WebGL1 blocklisted")에서는 WebGL2 로 그린다. 셰이더는 GLSL ES 1.00 이라 그대로 돈다
+  const gl = (gcv.getContext('webgl', { antialias: false, alpha: false }) || gcv.getContext('webgl2', { antialias: false, alpha: false }));
   const lerp = (a, b, t) => a + (b - a) * t;
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
@@ -1224,7 +1225,7 @@
   const P_FS = `precision mediump float;varying float vA,vW;uniform vec3 uCol,uWarm;
     void main(){gl_FragColor=vec4(mix(uCol,uWarm,vW)*vA*.9,0.);}`;
   const pcv = $('p');
-  const pgl = pcv.getContext('webgl', { antialias: false, alpha: true, premultipliedAlpha: true });
+  const pgl = (pcv.getContext('webgl', { antialias: false, alpha: true, premultipliedAlpha: true }) || pcv.getContext('webgl2', { antialias: false, alpha: true, premultipliedAlpha: true }));
   const P = { glint: null, sky: null, sea: null, wave: null, el: null, flow: null, frac: 1, slow: 0 };
   const kick = { v: 0 };
   function pKick(amp) { kick.v = Math.min(1, kick.v + amp * 0.7); }
@@ -2008,7 +2009,7 @@
     if(a<.002)discard;
     gl_FragColor=vec4(vec3(.86,.89,.92)*a,a);                     // 어느 바다 위에서도 같은 은색
   }`;
-  const rcv = $('rt'), rgl = rcv.getContext('webgl', { antialias: false, alpha: true, premultipliedAlpha: true });
+  const rcv = $('rt'), rgl = (rcv.getContext('webgl', { antialias: false, alpha: true, premultipliedAlpha: true }) || rcv.getContext('webgl2', { antialias: false, alpha: true, premultipliedAlpha: true }));
   let rPr = null; const rU = {};
   if (rgl) {
     const mk = (t, src) => { const o = rgl.createShader(t); rgl.shaderSource(o, src); rgl.compileShader(o); if (!rgl.getShaderParameter(o, rgl.COMPILE_STATUS)) console.error(rgl.getShaderInfoLog(o)); return o; };
@@ -3952,7 +3953,7 @@
       //   WebGL 을 못 쓰는 기기에서는 활꼴을 따라 밝아지는 선 빛(④)으로 그린다
       const cvP = document.createElement('canvas'); cvP.className = 'mGlow'; m.insertBefore(cvP, cv);
       const pg = (() => { try {
-        const gl = cvP.getContext('webgl', { alpha: true, antialias: false, depth: false, premultipliedAlpha: true }); if (!gl) return null;
+        const gl = (cvP.getContext('webgl', { alpha: true, antialias: false, depth: false, premultipliedAlpha: true }) || cvP.getContext('webgl2', { alpha: true, antialias: false, depth: false, premultipliedAlpha: true })); if (!gl) return null;
         const FS = `precision highp float;
 uniform vec2 uRes; uniform vec3 uMap; uniform vec3 uL; uniform vec2 uG; uniform float uT; uniform float uSz; uniform vec3 uP1,uP2,uP3;   // 배경 장면 색(hi·glow·hor), 무드가 바뀌면 같이 바뀐다
 vec3 palC(float t){return t<.36?mix(uP1,uP2,t/.36):mix(uP2,uP3,(t-.36)/.64);}   // 선 가까이 hi → 안쪽 꼬리 glow → 선 바깥 hor

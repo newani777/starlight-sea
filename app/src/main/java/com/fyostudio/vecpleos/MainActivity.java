@@ -36,6 +36,7 @@ public class MainActivity extends Activity implements VecSink {
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        if (getIntent().getBooleanExtra("webdebug", false)) WebView.setWebContentsDebuggingEnabled(true);   // 점검용: --ez webdebug true 로 켤 때만 크롬 원격 디버깅
         web = new WebView(this);
         setContentView(web);
         hideBars();
@@ -128,7 +129,8 @@ public class MainActivity extends Activity implements VecSink {
     @JavascriptInterface public void setAmbient(int rgb, int brightness) { pleos.setAmbient(rgb, brightness); }
 
     @JavascriptInterface public void nowPlaying(String title, boolean playing) {
-        if (playing && audio.requestAudioFocus(focus) == AudioManager.AUDIOFOCUS_REQUEST_FAILED) { js("vecCar.focus(false)"); playing = false; }   // 포커스를 못 받으면 재생하지 않는다
+        // 오디오 포커스는 웹뷰(크로미움)가 재생할 때 스스로 청하고, 잃으면 멈추고·잠깐 잃으면 줄였다 되찾는다.
+        // 11-09 에뮬레이터 시험: 앱이 따로 포커스를 또 청하면 크로미움 요청에 앱이 LOSS 를 받아 자기 곡을 멈췄다 → 앱은 청하지 않는다.
         VecMedia.nowPlaying(this, title, playing);
     }
 

@@ -31,7 +31,7 @@ import kotlin.jvm.functions.Function1;
 public class PleosBridge implements GearSelectionListener, SteeringWheelAngleListener, BrakePedalStatusListener, TurnSignalStateListener {
     private static final String TAG = "VecPleos";
     private static final long AMBIENT_MS = 200;        // 무드등 갱신 간격. 허용 빈도는 아직 회신 없음 → 보수적으로 200ms·바뀐 값만. 에뮬레이터에선 조명 변화를 눈으로 못 본다(11-04 회신) → 시연 모드는 화면 구석에 보내는 색을 함께 보인다
-    private static final float STEER_SIGN = 1f;        // 화면은 왼쪽이 +. SDK 부호는 에뮬레이터에서 확인한다
+    private static final float STEER_SIGN = 1f;        // 화면은 왼쪽이 +. 11-09 에뮬레이터 확인: Virtual Console 핸들을 시계 방향(오른쪽) +200 으로 돌리면 SDK 는 -200 → SDK 도 왼쪽이 +
     private final Context ctx;
     private final VecSink sink;
     private final CarBridge car;
@@ -44,6 +44,25 @@ public class PleosBridge implements GearSelectionListener, SteeringWheelAngleLis
     private long ambientT;
     private int lastColor, lastLevel = -1;
     private boolean listening;
+    // 핸들 각도: 11-09 Pleos Connect 에뮬레이터 v2.1.0 + SDK 2.3.2 에서 구독(registerSteeringWheelAngle)이
+    // 소수 각도("-90.0")를 정수로 읽다 NumberFormatException 으로 매번 실패한다. 공개 API 인 현재값 조회를 초당 10번 묻는다.
+    private static final long STEER_MS = 100;
+    private final android.os.Handler steerPoll = new android.os.Handler(android.os.Looper.getMainLooper());
+    private final Runnable steerTick = new Runnable() {
+        @Override public void run() {
+            if (vehicle == null || !listening) return;
+            vehicle.getSteeringWheel().getCurrentSteeringWheelAngle(deg -> { onSteeringWheelAngleUpdated(deg); return Unit.INSTANCE; }, steerFail);
+            vehicle.getGear().getCurrentGearSelectionState(g -> { onSelected(g); return Unit.INSTANCE; }, steerFail);   // 기어 구독은 한 번의 P 신호에 P·R 을 함께 보내 믿을 수 없다(11-09 에뮬레이터)
+            vehicle.getBrake().getCurrentBrakePedalStatus(on -> { onBrakePedalStatusUpdated(on); return Unit.INSTANCE; }, steerFail);   // 브레이크도 같은 이유("false")로 구독이 실패한다
+            steerPoll.postDelayed(this, STEER_MS);
+        }
+    };
+    private long steerFailT;
+    private final Function1<Exception, Unit> steerFail = e -> {   // 실패 로그는 10초에 한 번만
+        long now = SystemClock.uptimeMillis();
+        if (now - steerFailT > 10000) { steerFailT = now; Log.w(TAG, "핸들 각도 조회 실패", e); }
+        return Unit.INSTANCE;
+    };
 
     public PleosBridge(Context ctx, VecSink sink, CarBridge car) { this.ctx = ctx; this.sink = sink; this.car = car; }
 
@@ -59,9 +78,7 @@ public class PleosBridge implements GearSelectionListener, SteeringWheelAngleLis
     public void pause() {
         if (vehicle == null || !listening) return;
         listening = false;
-        vehicle.getGear().unregisterGearSelection(this);
-        vehicle.getSteeringWheel().unregisterSteeringWheelAngle(this);
-        vehicle.getBrake().unregisterBrakePedalStatus(this);
+        steerPoll.removeCallbacks(steerTick);
         vehicle.getTurnSignal().unregisterTurnSignalState(this);
         for (Map.Entry<DoorArea, DoorPositionListener> d : doorListeners.entrySet()) vehicle.getDoor().unregisterDoorPosition(d.getKey(), d.getValue());
         doorListeners.clear();
@@ -71,9 +88,8 @@ public class PleosBridge implements GearSelectionListener, SteeringWheelAngleLis
     public void resume() {
         if (vehicle == null || listening) return;
         listening = true;
-        vehicle.getGear().registerGearSelection(this);
-        vehicle.getSteeringWheel().registerSteeringWheelAngle(this);
-        vehicle.getBrake().registerBrakePedalStatus(this);
+        resumeT = SystemClock.uptimeMillis();
+        steerPoll.post(steerTick);
         vehicle.getTurnSignal().registerTurnSignalState(this);
         vehicle.getDoor().checkDoorPositionCapabilities(map -> { listenDoors(map.keySet()); return Unit.INSTANCE; }, fail);
         prepareAmbient();
@@ -101,9 +117,26 @@ public class PleosBridge implements GearSelectionListener, SteeringWheelAngleLis
     }
 
     // ---------- 받기 ----------
-    @Override public void onSelected(VehicleGear g) { String n = gearName(g); if (n != null) car.setGear(n); }
-    @Override public void onSteeringWheelAngleUpdated(Float deg) { if (deg != null) car.setSteer(deg * STEER_SIGN); }
-    @Override public void onBrakePedalStatusUpdated(Boolean on) { car.setBrake(Boolean.TRUE.equals(on)); }
+    private VehicleGear gearLogged, gearSeen;
+    private long resumeT;
+    @Override public void onSelected(VehicleGear g) {
+        // 같은 값이 조회 두 번(약 0.2초) 이어질 때만 바꾼다: 시작 직후 R 이 잠깐 섞여 들어왔다(11-09 에뮬레이터)
+        if (SystemClock.uptimeMillis() - resumeT < 1000) return;   // 연결 직후 0.2초가량 R 을 돌려준다 → 처음 1초는 기어를 믿지 않는다
+        if (g != gearSeen) { gearSeen = g; return; }
+        String n = gearName(g); if (n != null) car.setGear(n);
+        if (g != gearLogged) { gearLogged = g; Log.d(TAG, "기어 " + g + " → " + n); }
+    }
+    private float steerLogged = Float.NaN;
+    @Override public void onSteeringWheelAngleUpdated(Float deg) {
+        if (deg == null) return;
+        car.setSteer(deg * STEER_SIGN);
+        if (Float.isNaN(steerLogged) || Math.abs(deg - steerLogged) >= 10f) { steerLogged = deg; Log.d(TAG, "핸들 " + deg); }
+    }
+    private Boolean brakeLogged;
+    @Override public void onBrakePedalStatusUpdated(Boolean on) {
+        car.setBrake(Boolean.TRUE.equals(on));
+        if (on != null && !on.equals(brakeLogged)) { brakeLogged = on; Log.d(TAG, "브레이크 " + on); }
+    }
     @Override public void onTurnSignalStateUpdated(TurnSignalValue v) { car.setTurn(v == TurnSignalValue.LEFT ? -1 : v == TurnSignalValue.RIGHT ? 1 : 0); }
     @Override public void onFailed(Exception e) { fail.invoke(e); }
 
