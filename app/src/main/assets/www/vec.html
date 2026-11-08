@@ -35,6 +35,9 @@
   html.car #dock{height:auto;bottom:2.2cqh;flex-wrap:wrap;row-gap:.6cqh;column-gap:2.4cqw}
   html.car #dock button{padding:1.5cqh .5cqw;font-size:max(12px,1.7cqh)}
   html.car #dock #dSong{max-width:24cqw}
+  /* 11-09 광호님 「녹턴·그랜드 보야지·아틀리에에서 메뉴 항목을 누를 때 버튼 텍스트가 살짝 커졌다 작아지게」(차량판): 누르는 순간 1.12배로 부풀었다 0.4초에 걸쳐 제자리로 */
+  @keyframes dPress{0%{transform:scale(1)}35%{transform:scale(1.12)}100%{transform:scale(1)}}
+  html.car #dock button.press{animation:dPress .4s cubic-bezier(.22,.61,.36,1);transform-origin:50% 60%}
   html.car #dock #dMood{order:-1;flex-basis:100%;flex-wrap:wrap;column-gap:1.6cqw;row-gap:0}
   html.car #dockShade{height:15cqh} html.car.dock2 #dockShade{height:24cqh}
   html.car #menu .mList li[data-m="nocturne"] .ds{min-height:0}   /* 11-09 광호님 「그랜드 보야지가 녹턴과 아틀리에 정 중앙에」: 녹턴 설명의 두 줄 높이 자리(웹 배치용)를 차량판은 풀어 세 줄 간격을 같게 */
@@ -4367,6 +4370,8 @@ void main(){
       srcSync();
     }
     $('dMenu').onclick = e => { e.stopPropagation(); toMenu(); };
+    if (CAR_MODE) $('dock').addEventListener('pointerdown', e => { const b = e.target.closest('button'); if (!b) return; b.classList.remove('press'); void b.offsetWidth; b.classList.add('press'); });   // 누를 때 살짝 부풀기(차량판)
+    if (CAR_MODE) $('dock').addEventListener('animationend', e => e.target.classList.remove('press'));
     let px = null, py = 0, drag = 0;
     $('stage').addEventListener('pointerdown', e => { if (e.target.closest('#dock')) return; px = e.clientX; py = e.clientY; drag = 0; });
     addEventListener('pointerup', () => { px = null; });
