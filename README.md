@@ -29,7 +29,7 @@ adb shell am start -n com.fyostudio.vecpleos/.MainActivity --ez demo true
 ## APK
 
 - release APK: [`apk/FYOStudio_StarlightSea_release.apk`](apk/FYOStudio_StarlightSea_release.apk)
-- 패키지: `com.fyostudio.vecpleos` · 버전 1.0 (versionCode 2)
+- 패키지: `com.fyostudio.vecpleos` · 버전 1.0.1 (versionCode 3)
 
 ## 실행 방법
 
@@ -68,6 +68,10 @@ adb shell am start -n com.fyostudio.vecpleos/.MainActivity --ez demo true
 | `VecMediaService.java` · `VecMedia.java` | MediaBrowserService·MediaSession: 백그라운드 재생, 핸들 미디어 버튼, 오디오 포커스 |
 | `NowPlayingWatch.java` | 스트리밍 곡 정보 연결점(현재 꺼 둠) |
 | `app/src/main/assets/www/` | 화면(WebGL)·연출 스크립트·내장 곡 |
+
+## 출처와 라이선스
+
+별자리 자료(D3-Celestial, BSD 3-Clause)·별자리 설명(Astronomer's Atlas API)·경로 지도 데이터(© OpenStreetMap contributors, ODbL)를 씁니다. 원문 고지는 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)에 있습니다.
 
 ## 빌드
 

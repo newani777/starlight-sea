@@ -28,6 +28,12 @@ final class VecMedia {
                 int i; try { i = Integer.parseInt(id); } catch (NumberFormatException e) { i = 0; }
                 send(app, "vecCar.play(" + Math.max(0, Math.min(SONGS.length - 1, i)) + ")");
             }
+            // 11-09 Pleos Music/Audio 가이드 최소 기능 「검색 기반 재생」: 곡 이름에 검색어가 들어 있으면 그 곡, 없거나 비면 첫 곡
+            @Override public void onPlayFromSearch(String query, android.os.Bundle extras) {
+                int i = 0; String q = query == null ? "" : query.replace(" ", "").toLowerCase();
+                if (!q.isEmpty()) for (int k = 0; k < SONGS.length; k++) if (SONGS[k].replace(" ", "").toLowerCase().contains(q) || q.contains(SONGS[k].replace(" ", "").toLowerCase())) { i = k; break; }
+                send(app, "vecCar.play(" + i + ")");
+            }
         });
         session.setPlaybackState(state(false));
         session.setActive(true);
@@ -37,14 +43,28 @@ final class VecMedia {
     static PlaybackState state(boolean playing) {
         return new PlaybackState.Builder()
             .setActions(PlaybackState.ACTION_PLAY | PlaybackState.ACTION_PAUSE | PlaybackState.ACTION_PLAY_PAUSE | PlaybackState.ACTION_STOP
-                | PlaybackState.ACTION_SKIP_TO_NEXT | PlaybackState.ACTION_SKIP_TO_PREVIOUS | PlaybackState.ACTION_PLAY_FROM_MEDIA_ID)
+                | PlaybackState.ACTION_SKIP_TO_NEXT | PlaybackState.ACTION_SKIP_TO_PREVIOUS | PlaybackState.ACTION_PLAY_FROM_MEDIA_ID | PlaybackState.ACTION_PLAY_FROM_SEARCH)
             .setState(playing ? PlaybackState.STATE_PLAYING : PlaybackState.STATE_PAUSED, PlaybackState.PLAYBACK_POSITION_UNKNOWN, 1f).build();
     }
 
+    private static Boolean lastPlaying;
     static void nowPlaying(Context c, String title, boolean playing) {
         MediaSession s = get(c);
         s.setMetadata(new MediaMetadata.Builder().putString(MediaMetadata.METADATA_KEY_TITLE, title).putString(MediaMetadata.METADATA_KEY_ARTIST, "별빛 바다").build());
         s.setPlaybackState(state(playing));
+        if (lastPlaying == null || lastPlaying != playing) {            // 재생이 시작·멈출 때만 서비스 포그라운드를 바꾼다(Pleos 「재생 시점에 startForeground」)
+            lastPlaying = playing;
+            Intent i = new Intent(c, VecMediaService.class).setAction(VecMediaService.ACTION_FG).putExtra("playing", playing).putExtra("title", title);
+            try { c.startService(i); } catch (RuntimeException ignored) {}
+        }
+    }
+
+    // 앱 작업이 지워질 때(onTaskRemoved): 재생을 멈추고 세션을 정지 상태로
+    static void stop(Context c) {
+        Player p = player;
+        if (p != null) p.command("vecCar.focus(false)");
+        if (session != null) session.setPlaybackState(new PlaybackState.Builder().setActions(state(false).getActions())
+            .setState(PlaybackState.STATE_STOPPED, PlaybackState.PLAYBACK_POSITION_UNKNOWN, 0f).build());
     }
 
     private static void send(Context app, String js) {

@@ -12,13 +12,22 @@
     <!-- 무드등 색·밝기 쓰기(set). 11-09 에뮬레이터: CAR_LIGHTS 만으로는 setAmbientLight* 가 「need Permission」 -->
     <uses-permission android:name="pleos.car.permission.CONTROL_CAR_LIGHTS" />
     <uses-permission android:name="pleos.car.permission.CAR_DOORS" />
+    <!-- 11-09 Pleos Music/Audio 앱 가이드 「재생 시점에는 startForeground()」: 미디어 재생 포그라운드 서비스 -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <!-- 바깥 재생기 연결점(NowPlayingWatch, 공모전판은 꺼짐): 다른 앱의 재생 곡 정보를 읽으려면 시스템 권한이 필요하다. 현대와 진행하게 되면 아래를 켠다
     <uses-permission android:name="android.permission.MEDIA_CONTENT_CONTROL" /> -->
-    <application android:label="별빛 바다" android:icon="@mipmap/ic_launcher" android:hardwareAccelerated="true" android:allowBackup="false">
+    <!-- 11-09 Pleos 가이드: appCategory="audio"(Music/Audio 앱 카테고리) · 뒤로 가기는 OnBackInvokedCallback 으로 받는다(최상단에서 앱 숨김) -->
+    <application android:label="별빛 바다" android:icon="@mipmap/ic_launcher" android:hardwareAccelerated="true" android:allowBackup="false"
+        android:appCategory="audio" android:enableOnBackInvokedCallback="true">
+        <!-- 앱 런처 노출(Pleos Music/Audio 가이드 필수) -->
+        <meta-data android:name="androidx.car.app.launchable" android:value="true" />
+        <!-- CCP(로터리 컨트롤러) 미지원 선언: 필수 조작은 터치와 핸들 미디어 버튼으로 완결된다(Pleos CCP 가이드) -->
+        <meta-data android:name="com.hmg.rotary.ROTARY_SUPPORTED" android:value="false" />
         <uses-library android:name="android.car" android:required="false" />
         <!-- 음악 앱 등록 요건(11-05 회신): 차량 미디어 화면에 나타나는 MediaBrowserService + MediaSession -->
         <meta-data android:name="com.android.automotive" android:resource="@xml/automotive_app_desc" />
-        <service android:name=".VecMediaService" android:exported="true">
+        <service android:name=".VecMediaService" android:exported="true" android:foregroundServiceType="mediaPlayback">
             <intent-filter>
                 <action android:name="android.media.browse.MediaBrowserService" />
             </intent-filter>

@@ -37,7 +37,9 @@ public class MainActivity extends Activity implements VecSink {
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        if (getIntent().getBooleanExtra("webdebug", false)) WebView.setWebContentsDebuggingEnabled(true);   // 점검용: --ez webdebug true 로 켤 때만 크롬 원격 디버깅
+        // 11-09 Pleos 보안 가이드 「WebView 원격 디버깅 기능을 비활성화」: release 빌드는 어떤 경우에도 끈다. 디버그 빌드에서만 --ez webdebug true 로 켤 수 있다
+        boolean debuggable = (getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0;
+        WebView.setWebContentsDebuggingEnabled(debuggable && getIntent().getBooleanExtra("webdebug", false));
         web = new WebView(this);
         setContentView(web);
         hideBars();
@@ -47,6 +49,8 @@ public class MainActivity extends Activity implements VecSink {
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
         s.setMediaPlaybackRequiresUserGesture(false);
+        s.setAllowFileAccess(false);                                     // 화면은 https://appassets 주소(WebViewAssetLoader)로만 읽는다: 로컬 파일·콘텐츠 접근은 끈다(Pleos 보안 가이드)
+        s.setAllowContentAccess(false);
         web.addJavascriptInterface(this, "VecNative");
         web.setWebViewClient(new WebViewClient() {
             @Override public WebResourceResponse shouldInterceptRequest(WebView v, WebResourceRequest r) {
@@ -69,7 +73,18 @@ public class MainActivity extends Activity implements VecSink {
         if (all) car.start(); else requestPermissions(want, 1);
         boolean demo = getIntent().getBooleanExtra("demo", false);   // 시연: 주행 중에도 화면을 켜 두고, 교통 시뮬레이션과 가상 속도를 쓴다. 에뮬레이터 발표 전용
         web.loadUrl(demo ? URL + "&demo=1" : URL);
+        // 11-09 Pleos CCP 가이드 「최상단에서 Back 하드키 → moveTaskToBack(true), finish() 금지(어기면 심사 반려)」
+        if (android.os.Build.VERSION.SDK_INT >= 33)
+            getOnBackInvokedDispatcher().registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT, this::handleBack);
     }
+
+    // 뒤로 가기: 화면에 먼저 묻는다(모드 안이면 메뉴로). 메뉴(최상단)면 앱을 끝내지 않고 뒤로 숨긴다 — 음악은 이어진다
+    private void handleBack() {
+        if (!loaded) { moveTaskToBack(true); return; }
+        web.evaluateJavascript("window.vecBack ? vecBack() : false", r -> { if (!"true".equals(r)) moveTaskToBack(true); });
+    }
+    @SuppressWarnings("deprecation")
+    @Override public void onBackPressed() { handleBack(); }           // API 30~32
 
     @Override public void onRequestPermissionsResult(int c, String[] p, int[] r) {
         car.start();

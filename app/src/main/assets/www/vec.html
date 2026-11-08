@@ -2514,6 +2514,7 @@
   }
   window.vecSync?.attach(audio, () => actx?.outputLatency || 0);
   const nativeNow = () => window.VecNative?.nowPlaying?.(PLAYLIST[songI].name, !audio.paused);   // 차의 지금 재생 표시와 소리 주도권
+  addEventListener('pagehide', () => window.VecNative?.nowPlaying?.(PLAYLIST[songI].name, false));   // 11-09: 메뉴로 돌아가며 화면을 새로 읽을 때 음악이 멈춘 것을 차에 알린다(재생 중으로 남지 않게, 포그라운드 서비스도 내려간다)
   audio.addEventListener('playing', nativeNow); audio.addEventListener('pause', nativeNow);
   async function setMic(on, device) {
     if (on === micOn) return;
@@ -4155,6 +4156,9 @@
   const MODE = { name: null, t0: 0, s0: 0, label: '' };
   const MODE_LABEL = { nocturne: 'NOCTURNE', prelude: 'PRELUDE', voyage: 'GRAND VOYAGE', atelier: 'ATELIER' };   // 11-08 광호님: 서곡은 메뉴에서 빼고(그랜드 보야주와 겹친다) 음악 감상 모드를 첫 항목으로. 서곡 코드는 남겨 둔다
   const fin = { on: false };
+  // 11-09 Pleos 「CCP Back 하드키: 최상단에서는 앱을 숨긴다(moveTaskToBack), 종료 금지」: 앱 껍데기가 뒤로 가기를 받으면 먼저 여기에 묻는다.
+  //   모드 안이면 메뉴로 돌아가고 true(처리함), 메뉴(최상단)면 false → 껍데기가 앱을 뒤로 숨긴다. 웹에는 뒤로 가기 키가 없어 영향 없음
+  window.vecBack = () => { if (!MODE.name || fin.on) return false; toMenu(); return true; };
   function toMenu() {                                            // 어둠을 거쳐 메뉴로
     const c = $('curtain'); c.style.transition = 'opacity 1.2s cubic-bezier(.65,0,.35,1)'; c.style.opacity = 1;
     try { audio.volume = 1; } catch (_) {}

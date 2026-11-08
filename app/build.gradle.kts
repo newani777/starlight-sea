@@ -18,8 +18,8 @@ android {
         applicationId = "com.fyostudio.vecpleos"
         minSdk = 30
         targetSdk = 36
-        versionCode = 2
-        versionName = "1.0"
+        versionCode = 3
+        versionName = "1.0.1"
     }
     signingConfigs {
         if (keyProps.containsKey("storeFile")) create("release") {
@@ -27,6 +27,10 @@ android {
             storePassword = keyProps.getProperty("storePassword")
             keyAlias = keyProps.getProperty("keyAlias")
             keyPassword = keyProps.getProperty("keyPassword")
+            // 11-09 Pleos 문서 「minSDK 28 이상: 차량 사이버 보안 요건(사이닝 키 로테이션·리니지 지원)」: 키 교체(로테이션)와 그 이력(리니지)을 담을 수 있는 서명은 v3 이다.
+            //   예전 빌드는 v2 로만 서명돼 있었다 → v2(호환) + v3 를 함께 넣는다
+            enableV2Signing = true
+            enableV3Signing = true
         }
     }
     buildTypes {
