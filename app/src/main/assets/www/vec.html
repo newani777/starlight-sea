@@ -353,8 +353,10 @@
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
     F = Math.max(W, H) * 0.55;
     // 바다 해상도. 버거우면 아래에서 낮춘다. 11-09 광호님: 차량판도 0.7 유지(0.5 는 수평선 빛줄이 부드러워져서). ?gs=0.5 처럼 시험용으로 바꿀 수 있다
-    const gsCap = /[?&]gs=/.test(location.search) ? +new URLSearchParams(location.search).get('gs') : 1;
-    GS = Math.min(DPR * 0.7, 1, gsCap) * gsQ;
+    // 11-09 광호님 「탭에서 물방울만 PC보다 조금 흐리다」: 물방울은 바다 판 안에 바다 해상도로 그려진다 → 차량판은 바다 판을 화면 실제 화소 그대로(DPR 배)
+    //   플레오스(DPR 1)는 0.7 → 1.0, 탭(DPR 2)은 CSS 화소의 2배. 웹 시험판은 예전 그대로(DPR×0.7, 최대 1)
+    const gsCap = /[?&]gs=/.test(location.search) ? +new URLSearchParams(location.search).get('gs') : Infinity;
+    GS = Math.min(STAGE_Q.has('car') ? DPR : Math.min(DPR * 0.7, 1), gsCap) * gsQ;
     gcv.width = Math.max(2, Math.round(W * GS));
     gcv.height = Math.max(2, Math.round(H * GS));
     if (gl) gl.viewport(0, 0, gcv.width, gcv.height);
@@ -1405,7 +1407,8 @@
   if (qp0.has('debug')) window.__cond = cond;
   function drawParticles(T, dt, cx, cy, mOn) {
     if (!pgl) return;
-    P.slow = dt > 0.03 ? P.slow + dt : Math.max(0, P.slow - dt);     // 3초 넘게 버거우면 점을 줄인다
+    // 3초 넘게 버거우면 점을 줄인다. 11-09: 차량판은 초당 30장(한 장 33ms)이 정상이라 30ms 를 넘는다고 버거운 게 아니다 → 정한 주기의 1.5배를 넘을 때만(웹은 예전 그대로 30ms)
+    P.slow = dt > (FRAME_MS ? FRAME_MS * 1.5 / 1000 : 0.03) ? P.slow + dt : Math.max(0, P.slow - dt);
     if (P.slow > 3) { P.frac = Math.max(0.25, P.frac * 0.75); P.slow = 0; if (gsQ > 0.7) { gsQ = 0.7; resize(); } if (P.frac < 0.6) { document.querySelector('.lens.b3')?.remove(); surroundCap = 6; } }
     kick.v *= Math.exp(-dt * 1.3);
     for (let i = 0; i < 32; i++) uSpec[i] = clamp(specS[i], 0, 1.2);
