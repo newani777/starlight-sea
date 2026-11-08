@@ -37,6 +37,7 @@
   html.car #dock #dSong{max-width:24cqw}
   html.car #dock #dMood{order:-1;flex-basis:100%;flex-wrap:wrap;column-gap:1.6cqw;row-gap:0}
   html.car #dockShade{height:15cqh} html.car.dock2 #dockShade{height:24cqh}
+  html.car #menu .mList li[data-m="nocturne"] .ds{min-height:0}   /* 11-09 광호님 「그랜드 보야지가 녹턴과 아틀리에 정 중앙에」: 녹턴 설명의 두 줄 높이 자리(웹 배치용)를 차량판은 풀어 세 줄 간격을 같게 */
   html.car #guide{bottom:max(18px,11cqh)} html.car #gSpd{bottom:calc(max(18px,11cqh) + max(10px,2cqh) + 1px)}
   html.car #start p{max-width:420px;word-break:keep-all}   /* 11-09 차량판만: 플레오스 창에서 낱말 중간 줄바꿈 없게. 웹 시험판은 그대로 */
   button{font:inherit;color:var(--ink);background:rgba(255,230,220,.08);border:1px solid var(--line);border-radius:999px;padding:9px 15px;font-size:12px;font-weight:300;letter-spacing:.04em;cursor:pointer;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
@@ -1890,7 +1891,7 @@
     if (noct.on) {
       const c = Math.cos(st.travel), s = Math.sin(st.travel);
       for (const d of noct.drops) out.push({ id: d.id, kind: d.kind, ox: (d.x * c - d.s * s) * MV, oz: (d.x * s + d.s * c) * MV, a: clamp((72 - d.s) / 10, 0, 1) });
-    } else if (live.on) {
+    } else if (live.on && (live.objs.size || !traffic.on)) {
       const c = Math.cos(st.travel), s = Math.sin(st.travel);
       for (const e of live.objs.values()) out.push({ id: e.id, kind: e.kind, ox: (e.rx * c - e.ry * s) * MV, oz: (e.rx * s + e.ry * c) * MV, a: e.a * e.peak });
     } else if (traffic.on) {
@@ -4114,7 +4115,7 @@
       if (MODE.name === 'voyage') { dockBuild(); if (CAR_MODE) showDock(); return; }        // 그랜드 보야주: 전 구간·전체 곡, 화면을 끌면 곡·메뉴 막대(11-07 광호님: 무드 고르기·내 음악은 빼고 아틀리에에만)
       if (MODE.name === 'atelier' && !ED_CAR) { $('keys').classList.add('on'); setTimeout(() => $('keys').classList.remove('on'), 14000); }   // 자유주행(차량 탑재판)은 키보드 안내 없음
       if (MODE.name === 'atelier' && ED_CAR) for (const id of ['bSim', 'bBump', 'bFlip', 'bLog']) $(id).classList.add('hide');   // 시험용 버튼은 숨긴다
-      if (MODE.name === 'atelier' && CAR_MODE) { dockBuild(); showDock(); }   // 11-09: 차량판 아틀리에도 막대(전부)
+      if (MODE.name === 'atelier' && CAR_MODE) { traffic.on = true; dockBuild(); showDock(); }   // 11-09: 차량판 아틀리에도 막대(전부). 물방울은 가상 도로 흐름(광호님 「띄워 줘」), 실제 주변 인식 값이 들어오면 그쪽이 먼저
       if (!CAR_MODE || qp.has('debug')) { $('hud').classList.remove('hide'); $('bar').classList.remove('hide'); $('themes').classList.remove('hide'); }
       if (TOUCH) { $('pedals').classList.remove('hide'); goFull(); }
       return;
