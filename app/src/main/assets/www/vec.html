@@ -41,7 +41,10 @@
   html.car #dock #dMood{order:-1;flex-basis:100%;flex-wrap:wrap;column-gap:1.6cqw;row-gap:0}
   html.car #dockShade{height:15cqh} html.car.dock2 #dockShade{height:24cqh}
   html.car #menu .mList li[data-m="nocturne"] .ds{min-height:0}   /* 11-09 광호님 「그랜드 보야지가 녹턴과 아틀리에 정 중앙에」: 녹턴 설명의 두 줄 높이 자리(웹 배치용)를 차량판은 풀어 세 줄 간격을 같게 */
-  html.car #guide{bottom:max(18px,11cqh)} html.car #gSpd{bottom:calc(max(18px,11cqh) + max(10px,2cqh) + 1px)}
+  html.car #guide{bottom:max(18px,11cqh)}
+  /* 11-09 광호님 「그랜드 보야지에서 감정과 무드 항목 크기를 약간 줄이고 메뉴 항목 간격을 다시」(차량판): 감정·무드 칸 약 85%, 안내판은 속도와 감정 칸 사이 정가운데(JS 가 폭을 재서 놓는다) */
+  html.car #gBio{gap:max(14px,2.1cqw);bottom:calc(max(18px,11cqh) + max(10px,2cqh) + 1px)} html.car #gBio .lbl{font-size:max(8px,1.2cqh);margin-bottom:calc(max(8px,1.7cqh) + 3.7cqh)}   /* 속도 칸과 같은 높이, 숫자가 작아진 만큼 라벨 줄을 올려 SPEED·HEART 라벨 줄을 맞춘다 */ html.car #gBio .n{font-size:max(16px,3.05cqh)}
+  html.car #gBio .mood{font-size:max(11px,2.05cqh);line-height:max(16px,3.05cqh)} html.car #gSpd{bottom:calc(max(18px,11cqh) + max(10px,2cqh) + 1px)}
   /* 11-09 광호님 「메뉴를 선택할 때 선택 부분 컬러 표시가 안 예뻐」: 안드로이드가 누른 자리에 씌우는 파란 네모(탭 강조)와 길게 눌러 글자 선택을 차량판에서 끈다. 선택은 메뉴 자체의 빛줄기·글자색으로만 */
   html.car,html.car *{-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none} html.car :focus{outline:none}
   html.car #start p{max-width:420px;word-break:keep-all}   /* 11-09 차량판만: 플레오스 창에서 낱말 중간 줄바꿈 없게. 웹 시험판은 그대로 */
@@ -3020,7 +3023,12 @@
   function updateGuide(dt) {
     const el = $('guide'), G = rsim.on && rsim.R?.guide;
     const want = !!G && rsim.t > 4 && !car.hide;
-    if (want !== guide.shown) { guide.shown = want; el.classList.toggle('on', want); $('gSpd').classList.toggle('on', want); }
+    if (want !== guide.shown) { guide.shown = want; el.classList.toggle('on', want); $('gSpd').classList.toggle('on', want); guide.layT = 0; }
+    if (CAR_MODE && want && (guide.layT = (guide.layT || 0) - dt) <= 0) {   // 차량판: 안내판을 속도 칸과 감정 칸 사이 정가운데에(무드 글자 길이가 바뀌니 1초마다 다시 잰다)
+      guide.layT = 1;
+      const a = $('gSpd').getBoundingClientRect(), b = $('gBio').getBoundingClientRect(), gw = el.offsetWidth;
+      if (a.width && b.width && b.left - a.right > gw) { el.style.left = Math.round(a.right + (b.left - a.right - gw) / 2) + 'px'; el.style.transform = 'none'; }
+    }
     const v = String(Math.round(st.kmh));
     if (v !== guide.v) { guide.v = v; $('gSpdN').innerHTML = v + '<small>KM/H</small>'; }
     if (!G) return;
