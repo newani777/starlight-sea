@@ -28,3 +28,7 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 - 사용 파일: `app/src/main/assets/www/route-gwanghwamun-hyundai.js`, `route-coex-yangjae.js`
 - 지도 데이터 © OpenStreetMap contributors, Open Database License(ODbL) — https://www.openstreetmap.org/copyright
 - 경로 계산: OSRM(Open Source Routing Machine)
+
+## 앱 곡 네 곡 — FYO studio 제작(Suno Pro)
+- 사용 파일: `app/src/main/assets/www/vec.mp3`, `song2.mp3`, `song3.mp3`, `song4.mp3` (「42dot VEC」 「별빛 레코드 합창」 「별에서 온 레코드 보사노바」 「너와 나의 봄날」)
+- FYO studio가 Suno(https://suno.com) Pro 유료 구독 중에 만든 곡입니다. Suno 이용약관(2026-09-03 시행) 「Pro and Premier Accounts」 조항에 따라 결과물에 대한 Suno의 권리가 구독자에게 양도되며, 상업적 이용이 허용됩니다.

@@ -74,7 +74,7 @@ adb shell am start -n com.fyostudio.vecpleos/.MainActivity --ez demo true
 
 ## 출처와 라이선스
 
-별자리 자료(D3-Celestial, BSD 3-Clause)·별자리 설명(Astronomer's Atlas API)·경로 지도 데이터(© OpenStreetMap contributors, ODbL)를 씁니다. 원문 고지는 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)에 있습니다.
+별자리 자료(D3-Celestial, BSD 3-Clause)·별자리 설명(Astronomer's Atlas API)·경로 지도 데이터(© OpenStreetMap contributors, ODbL)를 씁니다. 앱 곡 네 곡은 FYO studio가 Suno Pro 유료 구독으로 만든 곡입니다(Suno 약관상 권리 양도·상업적 이용 허용). 원문 고지는 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)에 있습니다.
 
 ## 빌드
 
