@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 차량 미디어 화면에 음악 앱으로 나타난다(운영사무국 11-05 회신: Music/Audio 는 MediaBrowserService·MediaSession 필수) -->
+<automotiveApp>
+    <uses name="media" />
+</automotiveApp>

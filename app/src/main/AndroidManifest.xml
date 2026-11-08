@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-feature android:name="android.hardware.type.automotive" android:required="true" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- 실시간 속도: Vehicle SDK 에 없어 AAOS 표준 값으로 받는다 -->
+    <uses-permission android:name="android.car.permission.CAR_SPEED" />
+    <!-- 차속 대신: 실시간 속도 권한이 확정되지 않아(11-05 회신) 기본 위치 API 의 GPS 속도를 함께 쓴다 -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <!-- Vehicle SDK: 기어·핸들·브레이크 페달 / 방향지시등·무드등 / 문 -->
+    <uses-permission android:name="pleos.car.permission.CAR_DRIVE" />
+    <uses-permission android:name="pleos.car.permission.CAR_LIGHTS" />
+    <uses-permission android:name="pleos.car.permission.CAR_DOORS" />
+    <!-- 바깥 재생기 연결점(NowPlayingWatch, 공모전판은 꺼짐): 다른 앱의 재생 곡 정보를 읽으려면 시스템 권한이 필요하다. 현대와 진행하게 되면 아래를 켠다
+    <uses-permission android:name="android.permission.MEDIA_CONTENT_CONTROL" /> -->
+    <application android:label="별빛 바다" android:icon="@mipmap/ic_launcher" android:hardwareAccelerated="true" android:allowBackup="false">
+        <uses-library android:name="android.car" android:required="false" />
+        <!-- 음악 앱 등록 요건(11-05 회신): 차량 미디어 화면에 나타나는 MediaBrowserService + MediaSession -->
+        <meta-data android:name="com.android.automotive" android:resource="@xml/automotive_app_desc" />
+        <service android:name=".VecMediaService" android:exported="true">
+            <intent-filter>
+                <action android:name="android.media.browse.MediaBrowserService" />
+            </intent-filter>
+        </service>
+        <!-- 주행 중에는 화면을 그리지 않고 글자 한 장만 남긴다. 그래서 음악이 끊기지 않게 활동을 살려 둔다. 심사에서 인정되는지 확인 필요 -->
+        <activity android:name=".MainActivity" android:exported="true" android:screenOrientation="landscape" android:launchMode="singleTask"
+            android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize|uiMode"
+            android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen">
+            <meta-data android:name="distractionOptimized" android:value="true" />
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

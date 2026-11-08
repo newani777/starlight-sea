@@ -1,0 +1,13 @@
+# 빌드 결과물
+build/
+app/build/
+.gradle/
+.idea/
+*.iml
+local.properties
+# 서명 열쇠는 저장소에 넣지 않는다
+*.jks
+*.keystore
+keystore.properties
+# 라이선스 시험 음원(공모전 로컬 시험용, 배포 제외)
+app/src/main/assets/www/_local/
