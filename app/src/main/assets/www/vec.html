@@ -39,6 +39,8 @@
   html.car #dockShade{height:15cqh} html.car.dock2 #dockShade{height:24cqh}
   html.car #menu .mList li[data-m="nocturne"] .ds{min-height:0}   /* 11-09 광호님 「그랜드 보야지가 녹턴과 아틀리에 정 중앙에」: 녹턴 설명의 두 줄 높이 자리(웹 배치용)를 차량판은 풀어 세 줄 간격을 같게 */
   html.car #guide{bottom:max(18px,11cqh)} html.car #gSpd{bottom:calc(max(18px,11cqh) + max(10px,2cqh) + 1px)}
+  /* 11-09 광호님 「메뉴를 선택할 때 선택 부분 컬러 표시가 안 예뻐」: 안드로이드가 누른 자리에 씌우는 파란 네모(탭 강조)와 길게 눌러 글자 선택을 차량판에서 끈다. 선택은 메뉴 자체의 빛줄기·글자색으로만 */
+  html.car,html.car *{-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none} html.car :focus{outline:none}
   html.car #start p{max-width:420px;word-break:keep-all}   /* 11-09 차량판만: 플레오스 창에서 낱말 중간 줄바꿈 없게. 웹 시험판은 그대로 */
   button{font:inherit;color:var(--ink);background:rgba(255,230,220,.08);border:1px solid var(--line);border-radius:999px;padding:9px 15px;font-size:12px;font-weight:300;letter-spacing:.04em;cursor:pointer;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
   button.on{background:rgba(255,170,150,.22);border-color:rgba(255,200,185,.45)}
