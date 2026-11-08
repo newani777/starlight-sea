@@ -348,7 +348,9 @@
     cv.width = disp.width = W * DPR; cv.height = disp.height = H * DPR;
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
     F = Math.max(W, H) * 0.55;
-    GS = Math.min(DPR * 0.7, 1) * gsQ;                         // 바다 해상도. 버거우면 아래에서 낮춘다
+    // 바다 해상도. 버거우면 아래에서 낮춘다. 11-09 플레오스 최적화: 차량판은 0.5(픽셀 약 절반, 기준 칩 SA8295P GPU). ?gs=0.7 처럼 시험용으로 바꿀 수 있다
+    const gsCap = /[?&]gs=/.test(location.search) ? +new URLSearchParams(location.search).get('gs') : (/[?&]car=/.test(location.search) ? 0.5 : 1);
+    GS = Math.min(DPR * 0.7, 1, gsCap) * gsQ;
     gcv.width = Math.max(2, Math.round(W * GS));
     gcv.height = Math.max(2, Math.round(H * GS));
     if (gl) gl.viewport(0, 0, gcv.width, gcv.height);
@@ -992,15 +994,20 @@
           gl.blendColor(k, k, k, 1); gl.blendFunc(gl.CONSTANT_COLOR, gl.ONE);   // 가산이라 가운데가 하얗게 타지 않게 세기를 낮춘다
           gl.drawArrays(gl.TRIANGLES, 0, 3);
           gl.disable(gl.BLEND); gl.useProgram(pr);
-          if ((sunRead.n = (sunRead.n + 1) % 6) === 0) {           // 광원 가운데의 실제 밝기를 읽어 둔다: 수면은 이보다 밝으면 안 된다(11-03 광호님)
+          // 11-09 플레오스 최적화: 픽셀 읽기(readPixels)는 GPU 를 기다리게 해 차량 칩에서 비싸다 → 시간 간격으로 읽고(차량판 0.5초, 웹 0.1초),
+          //   따라가는 세기는 지난 시간만큼 키워 예전(60fps·6프레임마다 0.15/0.03)과 같은 속도로 따라간다
+          const sunNow = performance.now(), sunMs = sunRead.ms ??= (/[?&]car=/.test(location.search) ? 500 : 100);
+          if (sunNow - (sunRead.t || 0) >= sunMs) {           // 광원 가운데의 실제 밝기를 읽어 둔다: 수면은 이보다 밝으면 안 된다(11-03 광호님)
+            const fk = Math.min(10, (sunNow - (sunRead.t || sunNow - sunMs)) / 100); sunRead.t = sunNow;
+            sunRead.kc = 1 - Math.pow(0.85, fk); sunRead.kl = 1 - Math.pow(0.97, fk);
             const H0 = gcv.height, cr = Math.cos(st.roll), sr = Math.sin(st.roll);
             const x = Math.round(ux + H0 * (cr * sx + sr * 0.035)) - 2, y = Math.round(uy + H0 * (-sr * sx + cr * 0.035)) - 2;
             if (x >= 0 && y >= 0 && x + 5 <= gcv.width && y + 5 <= H0) {
               gl.readPixels(x, y, 5, 5, gl.RGBA, gl.UNSIGNED_BYTE, sunRead.px);
               let L = 0, j = 0; for (let i = 0; i < 100; i += 4) { const l = (0.2126 * sunRead.px[i] + 0.7152 * sunRead.px[i + 1] + 0.0722 * sunRead.px[i + 2]) / 255; if (l > L) { L = l; j = i; } }
               const m = Math.max(sunRead.px[j], sunRead.px[j + 1], sunRead.px[j + 2], 1);
-              for (let c = 0; c < 3; c++) st.sunC[c] += (sunRead.px[j + c] / m - st.sunC[c]) * 0.15;   // 광원의 실제 색(가장 밝은 채널 = 1)
-              st.sunL += (L - st.sunL) * 0.03;                       // 약 3초에 걸쳐 천천히 따라간다: 광원이 박동에 맞춰 밝아져도 수면 상한은 출렁이지 않는다
+              for (let c = 0; c < 3; c++) st.sunC[c] += (sunRead.px[j + c] / m - st.sunC[c]) * sunRead.kc;   // 광원의 실제 색(가장 밝은 채널 = 1)
+              st.sunL += (L - st.sunL) * sunRead.kl;                      // 약 3초에 걸쳐 천천히 따라간다: 광원이 박동에 맞춰 밝아져도 수면 상한은 출렁이지 않는다
             }
           }
         };
@@ -3210,8 +3217,11 @@
     else { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = 'vec-drive.csv'; a.click(); }
   }
   let last = performance.now(), t0 = last, tStart = last, hudT = 0, simPrev = 0;
+  // 11-09 플레오스 최적화(기준 칩 퀄컴 SA8295P): 차량판은 초당 30장. 웹은 그대로(제한 없음). ?fps=N 으로 바꿀 수 있다
+  const FPS_CAP = qp0.has('fps') ? +qp0.get('fps') : (CAR_MODE ? 30 : 0), FRAME_MS = FPS_CAP ? 1000 / FPS_CAP : 0;
   function frame(now) {
     if (car.hide && now - last < 100) { requestAnimationFrame(frame); return; }   // 주행 중은 소리 분석과 무드등만: 초당 10번이면 충분하다(플레오스 CPU 5% 기준)
+    if (FRAME_MS && now - last < FRAME_MS - 2) { requestAnimationFrame(frame); return; }   // 화면 주기(60Hz)의 절반마다 한 장
     const dt = Math.min(car.hide ? 0.2 : 0.05, (now - last) / 1000); last = now;
     // 세계의 시계: 저절로 흐르지 않는다. 차가 달리거나 소리가 들릴 때만 그만큼 흐른다
     const soundOn = analyser && (micOn || !audio.paused) ? (micOn ? mu.gate : 1) : 0;
