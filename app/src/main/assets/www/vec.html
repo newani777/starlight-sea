@@ -25,6 +25,10 @@
   #curtain{position:fixed;inset:0;background:#000;opacity:1;pointer-events:none;z-index:50;transition:opacity 2.4s cubic-bezier(.65,0,.35,1)}
   #start h1{margin:0;font-weight:300;font-size:30px;letter-spacing:.32em;padding-left:.32em}
   #start p{margin:0;color:var(--dim);font-size:13px;line-height:1.8;max-width:300px;font-weight:300}
+  /* 11-09 광호님 「플레오스 버전 메뉴의 폰트 크기를 약간만 줄여줘」: 차량판만 메뉴 글자를 약 12% 작게. 웹 시험판은 그대로 */
+  html.car #menu h1{font-size:max(25px,6.3cqh)} html.car #menu .mEn{font-size:max(9px,1.32cqh)} html.car #menu .mDesc{font-size:max(11px,1.67cqh)}
+  html.car #menu .mList b{font-size:max(18px,3.25cqh)} html.car #menu .mList .ko{font-size:max(11px,1.54cqh)} html.car #menu .mList .ds{font-size:max(10px,1.36cqh)}
+  html.car #menu .mKick{font-size:max(8px,1.06cqh)} html.car #menu .mTag, html.car #menu .mHint{font-size:max(8px,.97cqh)}
   html.car #start p{max-width:420px;word-break:keep-all}   /* 11-09 차량판만: 플레오스 창에서 낱말 중간 줄바꿈 없게. 웹 시험판은 그대로 */
   button{font:inherit;color:var(--ink);background:rgba(255,230,220,.08);border:1px solid var(--line);border-radius:999px;padding:9px 15px;font-size:12px;font-weight:300;letter-spacing:.04em;cursor:pointer;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
   button.on{background:rgba(255,170,150,.22);border-color:rgba(255,200,185,.45)}
@@ -3311,7 +3315,7 @@
     if (window.VecNative) { VecNative.saveLog(csv); showEvent('다운로드 폴더에 저장'); }
     else { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = 'vec-drive.csv'; a.click(); }
   }
-  let last = performance.now(), t0 = last, tStart = last, hudT = 0, simPrev = 0;
+  let last = performance.now(), t0 = last, tStart = last, hudT = 0, simPrev = 0, frameDue = 0;
   // 11-09 플레오스 최적화(기준 칩 퀄컴 SA8295P): 차량판은 초당 30장. 웹은 그대로(제한 없음). ?fps=N 으로 바꿀 수 있다
   const FPS_CAP = qp0.has('fps') ? +qp0.get('fps') : (CAR_MODE ? 30 : 0), FRAME_MS = FPS_CAP ? 1000 / FPS_CAP : 0;
   const FPS_DBG = qp0.has('fpsdbg') ? (window.__fps = { n: 0, slow: 0, max: 0 }) : null;
@@ -3319,7 +3323,13 @@
     // 주행 중은 소리 분석과 무드등만: 초당 10번이면 충분하다(플레오스 CPU 5% 기준).
     //   11-09: 화면 주기(초당 60번)마다 깨어나 시간만 보고 돌아가던 것을, 다음 차례까지 잠들었다가 깨어나게(타이머)
     if (car.hide && now - last < 100) { setTimeout(() => requestAnimationFrame(frame), Math.max(0, 96 - (now - last))); return; }
-    if (FRAME_MS && now - last < FRAME_MS - 2) { requestAnimationFrame(frame); return; }   // 화면 주기(60Hz)의 절반마다 한 장
+    // 11-09 광호님 「끊기는데」(플레오스 에뮬레이터): 예전엔 「지난 장에서 31.3ms 안 지났으면 건너뛰기」였다. 브라우저가 초당 30번 남짓 깨워 줄 때
+    //   (GPU 가 바쁜 기기·60Hz 화면) 30ms 만에 온 차례를 버리고 다음 차례(50~67ms)까지 기다려 끊겼다.
+    //   → 「다음 장 차례(due)」를 30분의 1초씩 쌓아 가고, 차례보다 1/3 주기(약 11ms) 이내로 이르면 그린다. 평균은 30장 그대로, 늦게 온 차례는 버리지 않는다
+    if (FRAME_MS) {
+      if (now < frameDue - FRAME_MS / 3) { requestAnimationFrame(frame); return; }
+      frameDue = now - frameDue > FRAME_MS ? now + FRAME_MS : frameDue + FRAME_MS;   // 많이 밀렸으면(쉼 뒤·무거운 장) 지금부터 다시 센다
+    }
     if (FPS_DBG) { FPS_DBG.n++; const g = now - last; if (g > 50) FPS_DBG.slow++; FPS_DBG.max = Math.max(FPS_DBG.max, g); }   // 시험용(&fpsdbg): 실제로 그린 장수·50ms 넘은 장(끊김)
     const dt = Math.min(car.hide ? 0.2 : 0.05, (now - last) / 1000); last = now;
     // 세계의 시계: 저절로 흐르지 않는다. 차가 달리거나 소리가 들릴 때만 그만큼 흐른다
@@ -3663,8 +3673,33 @@
       const sx = m.x / m.z * F, sy = m.y / m.z * F;
       if (Math.abs(sx) > edge || Math.abs(sy) > edge) { spawnMote(m, false); continue; }
       const near = clamp((900 - m.z) / 500, 0, 1);
-      const r = clamp(m.sp * 160 / m.z, m.big > 1 ? 1 : 0.7, 3.2) * m.big;
+      const r = clamp(m.sp * 160 / m.z, m.big > 1 ? 1 : 0.7, 3.2) * m.big * (CAR_MODE ? 0.5 : 1);   // 11-09 광호님 「반딧불 사이즈 50% 줄여」(차량판만)
       const a = near * (sy > 0 ? 0.45 : 1) * moteGlow * (m.big > 1 ? 0.85 : 1);
+      if (CAR_MODE) {
+        // 11-09 광호님 「잔상을 조금 부드럽게」(차량판만): 지난 9장(약 0.3초)의 자리를 곡선으로 잇고, 꼬리는 투명·머리는 밝게 한 줄로 그린다.
+        //   예전엔 바로 앞 장과 곧은 선 하나라 초당 30장에서 꺾여 보였다. 선은 반딧불마다 한 번만 그린다(2D 그리기 횟수 그대로)
+        const h = m.tr || (m.tr = []);
+        if (m.px == null || (h.length && Math.hypot(h[h.length - 1][0] - sx, h[h.length - 1][1] - sy) > 40 * m.big)) h.length = 0;   // 새로 났거나 튀었다
+        h.push([sx, sy]); if (h.length > 9) h.shift();
+        if (h.length > 2 && Math.hypot(h[0][0] - sx, h[0][1] - sy) > 0.5) {
+          const gr = ctx.createLinearGradient(h[0][0], h[0][1], sx, sy);
+          gr.addColorStop(0, `rgba(${m.css},0)`); gr.addColorStop(1, `rgba(${m.css},${0.32 * a})`);
+          ctx.strokeStyle = gr; ctx.lineWidth = Math.max(0.5, r * 0.8); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+          ctx.beginPath(); ctx.moveTo(h[0][0], h[0][1]);
+          for (let k = 1; k < h.length - 1; k++) ctx.quadraticCurveTo(h[k][0], h[k][1], (h[k][0] + h[k + 1][0]) / 2, (h[k][1] + h[k + 1][1]) / 2);
+          ctx.lineTo(sx, sy); ctx.stroke(); ctx.lineCap = 'butt'; ctx.lineJoin = 'miter';
+        }
+        // 연한 빛무리: 알맹이는 반으로 줄였지만 번짐은 예전 크기에 가깝게, 더 옅게
+        ctx.globalAlpha = Math.min(1, a * 0.09);
+        const gR = r * (m.big > 1 ? 4.5 : 3) * 2;
+        ctx.drawImage(sprite(m.rgb), sx - gR, sy - gR, gR * 2, gR * 2);
+        ctx.globalAlpha = Math.min(1, a);
+        ctx.fillStyle = `rgb(${m.css})`;
+        ctx.beginPath(); ctx.arc(sx, sy, r * 0.6, 0, 6.2832); ctx.fill();
+        ctx.globalAlpha = 1;
+        m.px = sx; m.py = sy;
+        continue;
+      }
       if (m.px != null && Math.hypot(m.px - sx, m.py - sy) < 40 * m.big) {
         ctx.strokeStyle = `rgba(${m.css},${0.28 * a})`;
         ctx.lineWidth = r * 0.8;
