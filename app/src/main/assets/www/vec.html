@@ -4116,7 +4116,8 @@
       if (MODE.name === 'atelier' && !ED_CAR) { $('keys').classList.add('on'); setTimeout(() => $('keys').classList.remove('on'), 14000); }   // 자유주행(차량 탑재판)은 키보드 안내 없음
       if (MODE.name === 'atelier' && ED_CAR) for (const id of ['bSim', 'bBump', 'bFlip', 'bLog']) $(id).classList.add('hide');   // 시험용 버튼은 숨긴다
       if (MODE.name === 'atelier' && CAR_MODE) { traffic.on = true; dockBuild(); showDock(); }   // 11-09: 차량판 아틀리에도 막대(전부). 물방울은 가상 도로 흐름(광호님 「띄워 줘」), 실제 주변 인식 값이 들어오면 그쪽이 먼저
-      if (!CAR_MODE || qp.has('debug')) { $('hud').classList.remove('hide'); $('bar').classList.remove('hide'); $('themes').classList.remove('hide'); }
+      // 11-09 광호님 「메뉴가 이중으로 나오지 않게」: 차량판은 아래 막대가 늘 떠 있으므로, 시험 표시(&debug)를 켜도 웹용 버튼 줄·테마 단추는 띄우지 않는다(글자 정보만)
+      if (!CAR_MODE) { $('hud').classList.remove('hide'); $('bar').classList.remove('hide'); $('themes').classList.remove('hide'); } else if (qp.has('debug')) $('hud').classList.remove('hide');
       if (TOUCH) { $('pedals').classList.remove('hide'); goFull(); }
       return;
     }
