@@ -33,6 +33,7 @@ public class MainActivity extends Activity implements VecSink {
     private boolean loaded, pausedByFocus;
     private String pendingCmd;
     private NowPlayingWatch watch;
+    private NaviBridge navi;
 
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);
@@ -66,6 +67,8 @@ public class MainActivity extends Activity implements VecSink {
         pleos.start();
         watch = new NowPlayingWatch(this, json -> js("vecSync.track(" + json + ")"));   // 바깥 재생기 연결점: 공모전판은 꺼져 있다(NowPlayingWatch.ENABLED)
         watch.start();
+        navi = new NaviBridge(this, this);                               // 실제 내비 안내(NaviHelper). 내비가 없으면 조용히 쉬고 화면은 경로 프로그램으로
+        navi.start();
         pendingCmd = getIntent().getStringExtra("cmd");                 // 차량 미디어 화면에서 곡을 골라 앱이 열린 경우
         // 실시간 속도(CAR_SPEED)는 권한 분류·제공이 아직 확정되지 않았다(11-05 회신). 기본 위치 API(GPS)를 함께 청해 차속이 없으면 그 속도로 대신한다
         String[] want = { Car.PERMISSION_SPEED, android.Manifest.permission.ACCESS_FINE_LOCATION };
@@ -136,6 +139,7 @@ public class MainActivity extends Activity implements VecSink {
     // ---------- 차량 값 → 화면 ----------
     @Override public void car(String json) { js("vecCar.feed(" + json + ")"); }
     @Override public void surround(String json) { js("vecSurround.feed(" + json + ")"); }
+    @Override public void navi(String json) { js("vecNav.live&&vecNav.live(" + json + ")"); }
     private void js(String code) {
         if (!loaded) return;
         runOnUiThread(() -> web.evaluateJavascript("window.vecCar&&" + code, null));
@@ -154,7 +158,7 @@ public class MainActivity extends Activity implements VecSink {
     @Override protected void onStart() { super.onStart(); car.resume(); pleos.resume(); }
     @Override protected void onStop() { super.onStop(); car.pause(); pleos.pause(); }     // 화면은 저절로 멈추고, 음악은 이어진다
     @Override protected void onDestroy() {
-        car.stop(); pleos.stop(); watch.stop();
+        car.stop(); pleos.stop(); watch.stop(); navi.stop();
         audio.abandonAudioFocusRequest(focus);
         VecMedia.player = null;                                          // 세션은 미디어 서비스가 계속 쥔다
         web.destroy();

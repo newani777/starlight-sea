@@ -48,10 +48,11 @@ adb shell am start -n com.fyostudio.vecpleos/.MainActivity --ez demo true
 ## 테스트 환경과 필요한 설정
 
 - Android Automotive OS, API 30 이상 (Pleos Connect)
-- Pleos Vehicle SDK `ai.pleos.playground:Vehicle:2.3.2` (Maven: `https://nexus-playground.pleos.ai/repository/maven-releases/`)
+- Pleos Vehicle SDK `ai.pleos.playground:Vehicle:2.3.2`, NaviHelper SDK `ai.pleos.playground:NaviHelper:3.0.5` (Maven: `https://nexus-playground.pleos.ai/repository/maven-releases/`)
 - 권한: `pleos.car.permission.CAR_DRIVE` · `CAR_LIGHTS` · `CAR_DOORS`, `android.car.permission.CAR_SPEED`, `ACCESS_FINE_LOCATION`(차속이 없을 때 GPS 속도로 대신)
 - 주행 중(기어 P가 아니고 시속 3km 초과)에는 화면 그리기를 멈추고 음악과 무드등만 이어집니다.
-- 주변 차량·보행자와 경로 주행은 시연용 시뮬레이션 값입니다.
+- 그랜드 보야지는 Pleos Connect 내비게이션의 실제 안내(NaviHelper: 다음 회전·거리·안내 문구·남은 거리·목적지)를 받아 안내판과 시선을 움직입니다. 에뮬레이터 내비 앱에서 목적지를 검색해 길 안내를 시작한 뒤 앱을 열면 확인할 수 있습니다. 안내가 없으면 시연 경로(광화문 → 현대자동차 본사)로 달립니다.
+- 주변 차량·보행자는 시연용 시뮬레이션 값입니다.
 
 ## 웹 시연판
 
@@ -65,6 +66,7 @@ adb shell am start -n com.fyostudio.vecpleos/.MainActivity --ez demo true
 | `app/src/main/java/.../MainActivity.java` | WebView 화면(WebViewAssetLoader), 시연 모드 |
 | `CarBridge.java` | AAOS 차량 속성(속도 등) → 화면 |
 | `PleosBridge.java` | Pleos Vehicle SDK 구독(기어·핸들·브레이크·방향지시등·문), 앰비언트 라이트 색·밝기 설정과 복원 |
+| `NaviBridge.java` | Pleos NaviHelper SDK: 실제 내비 안내 수신 → 그랜드 보야지 안내판·시선 |
 | `VecMediaService.java` · `VecMedia.java` | MediaBrowserService·MediaSession: 백그라운드 재생, 핸들 미디어 버튼, 오디오 포커스 |
 | `NowPlayingWatch.java` | 스트리밍 곡 정보 연결점(현재 꺼 둠) |
 | `app/src/main/assets/www/` | 화면(WebGL)·연출 스크립트·내장 곡 |

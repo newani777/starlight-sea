@@ -42,7 +42,7 @@
   html.car #dock #dMood{order:-1;flex-basis:100%;flex-wrap:wrap;column-gap:1.6cqw;row-gap:0}
   html.car #dockShade{height:15cqh} html.car.dock2 #dockShade{height:24cqh}
   html.car #menu .mList li[data-m="nocturne"] .ds{min-height:0}   /* 11-09 광호님 「그랜드 보야지가 녹턴과 아틀리에 정 중앙에」: 녹턴 설명의 두 줄 높이 자리(웹 배치용)를 차량판은 풀어 세 줄 간격을 같게 */
-  html.car #guide{bottom:max(18px,11cqh)}
+  html.car #guide{bottom:max(18px,11cqh);width:max(300px,33cqw)}   /* 11-09: 실제 내비 안내 문구(「대왕판교IC 방면」 등)가 잘리지 않게 차량판 안내판을 조금 넓힌다 */
   /* 11-09 광호님 「그랜드 보야지에서 감정과 무드 항목 크기를 약간 줄이고 메뉴 항목 간격을 다시」(차량판): 감정·무드 칸 약 85%, 안내판은 속도와 감정 칸 사이 정가운데(JS 가 폭을 재서 놓는다) */
   html.car #gBio{gap:max(14px,2.1cqw);bottom:calc(max(18px,11cqh) + max(10px,2cqh) + 1px)} html.car #gBio .lbl{font-size:max(8px,1.2cqh);margin-bottom:calc(max(8px,1.7cqh) + 3.7cqh)}   /* 속도 칸과 같은 높이, 숫자가 작아진 만큼 라벨 줄을 올려 SPEED·HEART 라벨 줄을 맞춘다 */ html.car #gBio .n{font-size:max(16px,3.05cqh)}
   html.car #gBio .mood{font-size:max(11px,2.05cqh);line-height:max(16px,3.05cqh)} html.car #gSpd{bottom:calc(max(18px,11cqh) + max(10px,2cqh) + 1px)}
@@ -2751,6 +2751,20 @@
     clear() { Object.assign(nav, { lat: null, lon: null, bearing: null, rel: null, space: null }); },
     state: () => ({ ...nav, compassLinked: course.h0 != null }),
   };
+  // 11-09 광호님 「그랜드 보야지에 NaviHelper(실제 내비 안내) 연동」: 플레오스판 앱 껍데기(NaviBridge)가 Pleos Connect 내비게이션 앱의 안내를 넣는다.
+  //   vecNav.live({ routing, tbt:[{ turn, dist(m), text }], remain(m), dest, lat, lon, arrived })
+  //   경로 안내 중 값이 5초 안에 들어왔으면 그랜드 보야지는 이 안내로 안내판을 그리고 시선을 회전 쪽으로 기울인다. 없으면 예전처럼 경로 프로그램(rsim)
+  const navLive = { on: false, t: 0, o: null, max: 0, destKey: '' };
+  window.vecNav.live = o => {
+    navLive.o = o; navLive.t = performance.now();
+    navLive.on = !!(o && o.routing && o.tbt && o.tbt.length);
+    if (!navLive.on) { navLive.max = 0; return; }
+    if (o.remain > navLive.max) navLive.max = o.remain;           // 처음 본 남은 거리를 전체로 삼아 진행 막대를 그린다
+    const dk = o.lat + ',' + o.lon;
+    if (o.lat && o.lon && dk !== navLive.destKey) { navLive.destKey = dk; window.vecNav.setDestination(o.lat, o.lon); }   // 목적지 별을 실제 목적지 쪽으로
+  };
+  const navReal = () => CAR_MODE && MODE.name === 'voyage' && navLive.on && performance.now() - navLive.t < 5000;
+  const navLean = { prev: 0 };
   function navTarget() {                                         // 목적지 별이 있어야 할 공간 방향(라디안). 없으면 null
     if (rsim.on) return rsimDest();                               // 실제 경로 시뮬레이션: 도착지 쪽
     if (nav.rel != null) return nav.space;
@@ -3022,9 +3036,30 @@
       $('gBio').style.setProperty('--pt', POINT[S.theme] || POINT.deep);
     }
   }
+  // 실제 내비 안내(NaviHelper)로 안내판 채우기: 화살표·남은 거리·안내 문구·목적지까지 거리·그다음 안내
+  function guideLive(el) {
+    const o = navLive.o, g = o.tbt[0], n = o.tbt[1];
+    const pk = THEMES[theme.i]?.key || 'deep';
+    if (pk !== guide.pk) { guide.pk = pk; el.style.setProperty('--pt', POINT[pk] || POINT.deep); }
+    const km = m => m >= 1000 ? (m / 1000).toFixed(m >= 10000 ? 0 : 1) + 'km' : Math.max(0, Math.round(m / 10) * 10) + 'm';
+    const key = g.turn + '|' + g.text + '|' + (o.dest || '');
+    if (key !== guide.liveKey) {
+      guide.liveKey = key; guide.i = -2; guide.nextKey = '';      // 경로 프로그램으로 돌아가면 그쪽 안내를 다시 그린다
+      $('gIcon').innerHTML = turnIcon(g.turn); $('gSub').textContent = g.text || o.dest || '';
+      for (const id of ['gIcon', 'gDist', 'gWords']) { const e = $(id); e.classList.remove('go'); void e.offsetWidth; e.classList.add('go'); }
+    }
+    const sub = o.dest ? o.dest + ' · ' + km(o.remain || 0) : (o.remain ? '목적지까지 ' + km(o.remain) : '');
+    if ($('gText').textContent !== sub) $('gText').textContent = sub;
+    const arrived = o.arrived || g.turn === 'arrive' && g.dist < 15, dist = arrived ? '도착' : fmtDist(g.dist);
+    if (dist !== guide.last) { guide.last = dist; const d = $('gDist'); d.innerHTML = dist; d.classList.toggle('ko', arrived); }
+    const f = navLive.max > 0 ? clamp(1 - (o.remain || 0) / navLive.max, 0, 1) : 0, fp = (f * 100).toFixed(2) + '%';
+    if (fp !== guide.fp) { guide.fp = fp; $('gFill').style.width = fp; $('gDot').style.left = fp; }
+    const nk = n ? 'L' + n.turn + '|' + fmtDist(n.dist) : 'L';
+    if (nk !== guide.nextKey) { guide.nextKey = nk; $('gThen').classList.toggle('hide', !n); if (n) { $('gThenIcon').innerHTML = turnIcon(n.turn); $('gThenDist').innerHTML = fmtDist(n.dist).replace(/<small>(.*?)<\/small>/, ' $1'); } }
+  }
   function updateGuide(dt) {
-    const el = $('guide'), G = rsim.on && rsim.R?.guide;
-    const want = !!G && rsim.t > 4 && !car.hide;
+    const el = $('guide'), live = navReal(), G = !live && rsim.on && rsim.R?.guide;
+    const want = (live || (!!G && rsim.t > 4)) && !car.hide;
     if (want !== guide.shown) { guide.shown = want; el.classList.toggle('on', want); $('gSpd').classList.toggle('on', want); guide.layT = 0; }
     if (CAR_MODE && want && (guide.layT = (guide.layT || 0) - dt) <= 0) {   // 차량판: 안내판을 속도 칸과 감정 칸 사이 정가운데에(무드 글자 길이가 바뀌니 1초마다 다시 잰다)
       guide.layT = 1;
@@ -3033,6 +3068,8 @@
     }
     const v = String(Math.round(st.kmh));
     if (v !== guide.v) { guide.v = v; $('gSpdN').innerHTML = v + '<small>KM/H</small>'; }
+    if (live) return guideLive(el);
+    guide.liveKey = '';
     if (!G) return;
     const pk = THEMES[theme.i]?.key || 'deep';
     if (pk !== guide.pk) { guide.pk = pk; el.style.setProperty('--pt', POINT[pk] || POINT.deep); }
@@ -3424,7 +3461,7 @@
       const coast = v0 > 0.05 ? (1 - pc.th) * 0.75 + 0.0005 * v0 * v0 : 0;
       pc.v = Math.max(0, v0 + (push - stop - coast) * dt);
       }
-      const voyCarStill = rsim.on && car.on && (car.gear === 'P' || car.kmh < 3);   // 차량판 그랜드 보야주: 서 있는 동안 경로 프로그램이 달린다
+      const navNow = navReal(), voyCarStill = rsim.on && car.on && (car.gear === 'P' || car.kmh < 3) && !navNow;   // 차량판 그랜드 보야주: 서 있는 동안 경로 프로그램이 달린다
       if (rsim.on && (!car.on || voyCarStill)) rsimSpeed(dt, K, v0);
       // 11-09 광호님 「플레오스판에도 녹턴(음악 감상용 비주얼라이제이션)」: 차가 서 있으면(기어 P 또는 시속 3km 미만) 웹 녹턴과 같이
       //   느린 흐름·시선 숨쉬기로 바다를 펼친다. 달리면 화면은 쉬고(car.hide), 다시 서면 녹턴으로 돌아온다
@@ -3434,7 +3471,12 @@
       pc.steer += ((K.l ? 1 : 0) - (K.r ? 1 : 0) - pc.steer) * k(0.16);
       pc.yaw = car.on ? pc.v * Math.tan(car.steer * Math.PI / 180 / STEER_RATIO) / WHEELBASE : pc.steer * Math.min(pc.v / 6, 5.5 / Math.max(pc.v, 1));   // 저속은 회전 반경 6m, 고속은 쏠림 한계
       if (noct.on && (!car.on || noctCarStill)) { pc.yaw = 0; noctLook(); }
-      if (rsim.on && (!car.on || voyCarStill) && MODE.name === 'voyage') voyLook(dt);   // 그랜드 보야주: 직선에서 녹턴의 절반 크기로 시선이 흐른다
+      if (rsim.on && (!car.on || voyCarStill) && MODE.name === 'voyage') voyLook(dt);
+      if (CAR_MODE && MODE.name === 'voyage') {                  // 실제 안내: 회전 400m 앞부터 그쪽으로 시선이 최대 7° 기운다(안내가 왼쪽이면 바다도 왼쪽으로). 안내가 없으면 천천히 제자리로
+        const g = navNow ? navLive.o.tbt[0] : null, side = !g ? 0 : /left/.test(g.turn) ? 1 : /right/.test(g.turn) ? -1 : 0;
+        const want = side * 7 * Math.PI / 180 * (g ? smooth01(400, 60, g.dist) : 0), cur = navLean.prev + (want - navLean.prev) * (1 - Math.exp(-dt / 1.6));
+        pc.look += cur - navLean.prev; navLean.prev = cur;
+      }   // 그랜드 보야주: 직선에서 녹턴의 절반 크기로 시선이 흐른다
       if (rsim.on && (!car.on || voyCarStill)) pc.yaw = rsimYaw(dt);              // 핸들은 길을 따라 스스로
       st.kmh = pc.v * 3.6; st.accLong = pc.acc; st.latAcc = pc.v * pc.yaw;
       dHead = pc.yaw * dt + pc.look; pc.look = 0;

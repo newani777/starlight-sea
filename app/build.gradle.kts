@@ -48,4 +48,5 @@ android {
 dependencies {
     implementation("androidx.webkit:webkit:1.12.1")
     implementation("ai.pleos.playground:Vehicle:2.3.2")
+    implementation("ai.pleos.playground:NaviHelper:3.0.5")   // 11-09 광호님 「그랜드 보야지 NaviHelper 연동 넣어 줘」: 실제 내비 안내(회전·남은 거리)
 }
