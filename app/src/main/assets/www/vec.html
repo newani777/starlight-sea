@@ -25,6 +25,7 @@
   #curtain{position:fixed;inset:0;background:#000;opacity:1;pointer-events:none;z-index:50;transition:opacity 2.4s cubic-bezier(.65,0,.35,1)}
   #start h1{margin:0;font-weight:300;font-size:30px;letter-spacing:.32em;padding-left:.32em}
   #start p{margin:0;color:var(--dim);font-size:13px;line-height:1.8;max-width:300px;font-weight:300}
+  html.car #start p{max-width:420px;word-break:keep-all}   /* 11-09 차량판만: 플레오스 창에서 낱말 중간 줄바꿈 없게. 웹 시험판은 그대로 */
   button{font:inherit;color:var(--ink);background:rgba(255,230,220,.08);border:1px solid var(--line);border-radius:999px;padding:9px 15px;font-size:12px;font-weight:300;letter-spacing:.04em;cursor:pointer;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
   button.on{background:rgba(255,170,150,.22);border-color:rgba(255,200,185,.45)}
   #go{font-size:14px;padding:13px 34px;letter-spacing:.2em}
@@ -339,7 +340,10 @@
   // ---------- 화면 ----------
   let W, H, DPR, F, GS;
   let gsQ = 1;
-  const STAGE_A = 3840 / 1440, STAGE_FREE = new URLSearchParams(location.search).get('aspect') === 'free';   // GV90 디스플레이 3840×1440
+  // 무대 비율: 웹은 GV90 디스플레이 3840×1440(24:9). 11-09 광호님 「화면비율을 플레오스에 맞추자」: 차량판(?car=1)은 앱 창을 꽉 채운다
+  //   (Pleos Connect 앱 창 약 1682×1210, 위아래 검은 띠 없음). ?aspect=free 는 어디서나 꽉 채우고, ?aspect=stage 는 차량판에서도 24:9
+  const STAGE_A = 3840 / 1440, STAGE_Q = new URLSearchParams(location.search), STAGE_FREE = STAGE_Q.get('aspect') === 'free' || (STAGE_Q.has('car') && STAGE_Q.get('aspect') !== 'stage');
+  if (STAGE_Q.has('car')) document.documentElement.classList.add('car');   // 차량판 전용 스타일(html.car)
   function resize() {
     DPR = Math.min(window.devicePixelRatio || 1, 2);
     const ww = Math.max(2, innerWidth), wh = Math.max(2, innerHeight), A = STAGE_FREE ? ww / wh : STAGE_A;   // 무대: GV90 24:9 에 맞춰 창 안에 가장 크게
@@ -348,8 +352,8 @@
     cv.width = disp.width = W * DPR; cv.height = disp.height = H * DPR;
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
     F = Math.max(W, H) * 0.55;
-    // 바다 해상도. 버거우면 아래에서 낮춘다. 11-09 플레오스 최적화: 차량판은 0.5(픽셀 약 절반, 기준 칩 SA8295P GPU). ?gs=0.7 처럼 시험용으로 바꿀 수 있다
-    const gsCap = /[?&]gs=/.test(location.search) ? +new URLSearchParams(location.search).get('gs') : (/[?&]car=/.test(location.search) ? 0.5 : 1);
+    // 바다 해상도. 버거우면 아래에서 낮춘다. 11-09 광호님: 차량판도 0.7 유지(0.5 는 수평선 빛줄이 부드러워져서). ?gs=0.5 처럼 시험용으로 바꿀 수 있다
+    const gsCap = /[?&]gs=/.test(location.search) ? +new URLSearchParams(location.search).get('gs') : 1;
     GS = Math.min(DPR * 0.7, 1, gsCap) * gsQ;
     gcv.width = Math.max(2, Math.round(W * GS));
     gcv.height = Math.max(2, Math.round(H * GS));
@@ -994,12 +998,12 @@
           gl.blendColor(k, k, k, 1); gl.blendFunc(gl.CONSTANT_COLOR, gl.ONE);   // 가산이라 가운데가 하얗게 타지 않게 세기를 낮춘다
           gl.drawArrays(gl.TRIANGLES, 0, 3);
           gl.disable(gl.BLEND); gl.useProgram(pr);
-          // 11-09 플레오스 최적화: 픽셀 읽기(readPixels)는 GPU 를 기다리게 해 차량 칩에서 비싸다 → 시간 간격으로 읽고(차량판 0.5초, 웹 0.1초),
-          //   따라가는 세기는 지난 시간만큼 키워 예전(60fps·6프레임마다 0.15/0.03)과 같은 속도로 따라간다
-          const sunNow = performance.now(), sunMs = sunRead.ms ??= (/[?&]car=/.test(location.search) ? 500 : 100);
-          if (sunNow - (sunRead.t || 0) >= sunMs) {           // 광원 가운데의 실제 밝기를 읽어 둔다: 수면은 이보다 밝으면 안 된다(11-03 광호님)
-            const fk = Math.min(10, (sunNow - (sunRead.t || sunNow - sunMs)) / 100); sunRead.t = sunNow;
-            sunRead.kc = 1 - Math.pow(0.85, fk); sunRead.kl = 1 - Math.pow(0.97, fk);
+          // 11-09 플레오스 최적화(차량판만): 픽셀 읽기(readPixels)는 GPU 를 기다리게 해 차량 칩에서 비싸다 → 0.5초 간격으로 읽고,
+          //   따라가는 세기는 지난 시간만큼 키워 예전과 같은 속도로 따라간다. 웹 시험판은 예전 그대로(6프레임마다 0.15/0.03)
+          const sunCar = sunRead.car ??= /[?&]car=/.test(location.search), sunNow = performance.now();
+          if (sunCar ? sunNow - (sunRead.t || 0) >= 500 : (sunRead.n = (sunRead.n + 1) % 6) === 0) {           // 광원 가운데의 실제 밝기를 읽어 둔다: 수면은 이보다 밝으면 안 된다(11-03 광호님)
+            if (sunCar) { const fk = Math.min(10, (sunNow - (sunRead.t || sunNow - 500)) / 100); sunRead.t = sunNow; sunRead.kc = 1 - Math.pow(0.85, fk); sunRead.kl = 1 - Math.pow(0.97, fk); }
+            else { sunRead.kc = 0.15; sunRead.kl = 0.03; }
             const H0 = gcv.height, cr = Math.cos(st.roll), sr = Math.sin(st.roll);
             const x = Math.round(ux + H0 * (cr * sx + sr * 0.035)) - 2, y = Math.round(uy + H0 * (-sr * sx + cr * 0.035)) - 2;
             if (x >= 0 && y >= 0 && x + 5 <= gcv.width && y + 5 <= H0) {
