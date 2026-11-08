@@ -23,7 +23,8 @@ import androidx.webkit.WebViewAssetLoader;
 
 // 플레오스판 껍데기: 별빛 바다 화면을 띄우고, 차량 값은 넣어 주고, 소리 주도권과 핸들 버튼을 시스템과 맞춘다
 public class MainActivity extends Activity implements VecSink {
-    private static final String URL = "https://appassets.androidplatform.net/assets/www/vec.html?car=1&phase=0";
+    // ed=car: 차량 탑재판 시작 메뉴(NOCTURNE 음악 감상 · GRAND VOYAGE · 자유주행). 11-09 광호님 「플레오스판에도 녹턴 모드」
+    private static final String URL = "https://appassets.androidplatform.net/assets/www/vec.html?car=1&ed=car&phase=0";
     private WebView web;
     private CarBridge car;
     private PleosBridge pleos;
