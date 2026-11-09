@@ -69,7 +69,7 @@ public class MainActivity extends Activity implements VecSink {
         watch.start();
         navi = new NaviBridge(this, this);                               // 실제 내비 안내(NaviHelper). 내비가 없으면 조용히 쉬고 화면은 경로 프로그램으로
         navi.start();
-        pendingCmd = getIntent().getStringExtra("cmd");                 // 차량 미디어 화면에서 곡을 골라 앱이 열린 경우
+        pendingCmd = safeCmd(getIntent().getStringExtra("cmd"));       // 차량 미디어 화면에서 곡을 골라 앱이 열린 경우
         // 실시간 속도(CAR_SPEED)는 권한 분류·제공이 아직 확정되지 않았다(11-05 회신). 기본 위치 API(GPS)를 함께 청해 차속이 없으면 그 속도로 대신한다
         String[] want = { Car.PERMISSION_SPEED, android.Manifest.permission.ACCESS_FINE_LOCATION };
         boolean all = true; for (String p : want) all &= checkSelfPermission(p) == PackageManager.PERMISSION_GRANTED;
@@ -80,6 +80,10 @@ public class MainActivity extends Activity implements VecSink {
         if (android.os.Build.VERSION.SDK_INT >= 33)
             getOnBackInvokedDispatcher().registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT, this::handleBack);
     }
+
+    // 11-09 Pleos 심사(컴포넌트 노출·접근 제어): 바깥에서 넘어온 명령은 앱이 스스로 보내는 미디어 명령 모양만 받는다(임의 JS 실행 차단)
+    private static final java.util.regex.Pattern CMD_OK = java.util.regex.Pattern.compile("vecCar\\.(focus\\((true|false)\\)|next\\(\\)|prev\\(\\)|toggle\\(\\)|play\\([0-9]\\))");
+    static String safeCmd(String c) { return c != null && CMD_OK.matcher(c).matches() ? c : null; }
 
     // 뒤로 가기: 화면에 먼저 묻는다(모드 안이면 메뉴로). 메뉴(최상단)면 앱을 끝내지 않고 뒤로 숨긴다 — 음악은 이어진다
     private void handleBack() {
@@ -124,7 +128,7 @@ public class MainActivity extends Activity implements VecSink {
         }
     }
 
-    @Override protected void onNewIntent(Intent i) { super.onNewIntent(i); String c = i.getStringExtra("cmd"); if (c != null) { if (loaded) js(c); else pendingCmd = c; } }
+    @Override protected void onNewIntent(Intent i) { super.onNewIntent(i); String c = safeCmd(i.getStringExtra("cmd")); if (c != null) { if (loaded) js(c); else pendingCmd = c; } }
 
     @Override public boolean dispatchKeyEvent(KeyEvent e) {
         if (e.getAction() != KeyEvent.ACTION_DOWN) return super.dispatchKeyEvent(e);
@@ -154,9 +158,12 @@ public class MainActivity extends Activity implements VecSink {
         VecMedia.nowPlaying(this, title, playing);
     }
 
+    // 화면(웹뷰)이 「앱이 멈추지 않았는데 소리가 멈췄다 = 다른 소리가 포커스를 가져갔다」고 알려 온다
+    @JavascriptInterface public void focusLost() { VecMedia.focusLost(getApplicationContext()); }
+
     @Override public void onWindowFocusChanged(boolean f) { super.onWindowFocusChanged(f); if (f) hideBars(); }
-    @Override protected void onStart() { super.onStart(); car.resume(); pleos.resume(); }
-    @Override protected void onStop() { super.onStop(); car.pause(); pleos.pause(); }     // 화면은 저절로 멈추고, 음악은 이어진다
+    @Override protected void onStart() { super.onStart(); car.resume(); pleos.resume(); if (navi != null) navi.resume(); }
+    @Override protected void onStop() { super.onStop(); car.pause(); pleos.pause(); if (navi != null) navi.pause(); }     // 화면은 저절로 멈추고, 음악은 이어진다
     @Override protected void onDestroy() {
         car.stop(); pleos.stop(); watch.stop(); navi.stop();
         audio.abandonAudioFocusRequest(focus);

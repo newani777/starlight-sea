@@ -42,6 +42,21 @@
   html.car #dock #dMood{order:-1;flex-basis:100%;flex-wrap:wrap;column-gap:1.6cqw;row-gap:0}
   html.car #dockShade{height:15cqh} html.car.dock2 #dockShade{height:24cqh}
   html.car #menu .mList li[data-m="nocturne"] .ds{min-height:0}   /* 11-09 광호님 「그랜드 보야지가 녹턴과 아틀리에 정 중앙에」: 녹턴 설명의 두 줄 높이 자리(웹 배치용)를 차량판은 풀어 세 줄 간격을 같게 */
+  /* 11-09 Pleos 디자인 가이드 「글자·아이콘 대비율 4.5:1 이상」·「최소 폰트 12sp 이상」(차량판만). 바탕(거의 검정)에서 #7d8792 ≈ 5:1 이 하한 */
+  html.car #menu .mKick, html.car #menu .mTag, html.car #menu .mHint, html.car #dock .dLbl, html.car #guide .lbl, html.car #gSpd .lbl, html.car #gBio .lbl{color:#8b95a1;font-size:max(12px,1.2cqh)}
+  html.car #gText, html.car #gThenDist, html.car #gSpdN small, html.car #gBio .n small{color:#8b95a1}
+  html.car #gText{font-size:max(14px,1.9cqh)}
+  html.car #menu .mList .ds{color:#7d8792} html.car #menu .mList li.sel .ds{color:#a3acb6}
+  /* 11-09 Pleos 화면 모델: 분할 화면의 세로(portrait) 창에서도 레이아웃이 맞게. 세로 창은 메뉴 설명 폭을 넓히고 제목을 줄인다 */
+  @media (max-aspect-ratio: 1/1) {
+    html.car #menu .mLeft{left:6cqw;max-width:40cqw} html.car #menu h1{font-size:max(22px,3.6cqh)}
+    html.car #menu .mList{left:50cqw} html.car #menu .mList .ds{max-width:44cqw} html.car #menu .mHint{left:50cqw}
+    html.car #menu .mList b{font-size:max(16px,2.3cqh);letter-spacing:.26em}
+    html.car #guide#guide{width:56cqw}   /* 세로 창: 안내 문구가 잘리지 않게(속도 칸 오른쪽부터 화면 가운데 기준) */
+    html.car #gBio{bottom:auto;top:max(16px,5cqh)}   /* 그랜드 보야지: 세로 창은 폭이 좁아 안내판과 겹친다 → 감정 칸을 위로 */
+  }
+  html.drv #driveHold{z-index:60}   /* 주행 중(플랫폼 주행 규제): 시작 메뉴·막대 위까지 덮는다 */
+  @media (min-aspect-ratio: 3/1) { html.car #menu .mLeft{left:26cqw} }   /* 초광폭(Connect-WS 3840×850 등): 제목이 왼쪽 끝으로 멀어지지 않게 메뉴 쪽으로 모은다 */
   html.car #guide{bottom:max(18px,11cqh);width:max(300px,33cqw)}   /* 11-09: 실제 내비 안내 문구(「대왕판교IC 방면」 등)가 잘리지 않게 차량판 안내판을 조금 넓힌다 */
   /* 11-09 광호님 「그랜드 보야지에서 감정과 무드 항목 크기를 약간 줄이고 메뉴 항목 간격을 다시」(차량판): 감정·무드 칸 약 85%, 안내판은 속도와 감정 칸 사이 정가운데(JS 가 폭을 재서 놓는다) */
   html.car #gBio{gap:max(14px,2.1cqw);bottom:calc(max(18px,11cqh) + max(10px,2cqh) + 1px)} html.car #gBio .lbl{font-size:max(8px,1.2cqh);margin-bottom:calc(max(8px,1.7cqh) + 3.7cqh)}   /* 속도 칸과 같은 높이, 숫자가 작아진 만큼 라벨 줄을 올려 SPEED·HEART 라벨 줄을 맞춘다 */ html.car #gBio .n{font-size:max(16px,3.05cqh)}
@@ -326,6 +341,8 @@
   ];
   const THEME_MOVE = 2.5;             // 시험에서 비교하기 좋은 전환 시간(초). 실제 쓰임은 3~5분
   const theme = { i: -1, t: 1, from: null };
+  const ambNow = [0, 0, 0];           // 지금 무드등에 보낸 색(차량판). 무드 전환의 출발색
+  let ambFrom = null;
   function themeApply() {
     if (theme.i < 0 && theme.t >= 1) return;
     const to = theme.i >= 0 ? THEMES[theme.i] : pal, f = theme.from || to, e = theme.t * theme.t * (3 - 2 * theme.t);
@@ -339,6 +356,7 @@
   }
   function setTheme(i, dur) {
     theme.from = { ...pal }; theme.i = i; theme.t = 0; theme.dur = dur || THEME_MOVE;
+    ambFrom =ambNow[0] + ambNow[1] + ambNow[2] > 0 ? ambNow.slice() : null;   // 무드등도 지금 켜진 색에서 출발(전환 도중 또 바꿔도 끊기지 않게)
     document.querySelectorAll('#themes button').forEach(b => b.classList.toggle('on', +b.dataset.i === i));
   }
   // 세로 화면에서는 아래 버튼 줄이 두 줄로 접힌다: 테마 줄을 그 높이만큼 위로 올려 겹치지 않게 한다
@@ -2499,10 +2517,12 @@
   //   파일은 _local/(저장소·공개 배포 제외)에만 둔다. 27분짜리 한 곡이라 미리 분석하면 브라우저가 수백 MB 를 쓴다 → long: 미리 분석하지 않고 들리는 소리로 바로 반응(fx.js liveStep)
   const NOCT_LIST = [{ src: '_local/nocturne-jazz.mp3', name: 'Jazz Playlist', map: null, long: true, dur: 1622.03, gain: 0.851 }];
   let songI = 0;
+  let selfStopT = 0;                  // 앱(화면)이 직접 멈춘 시각. 그 밖의 멈춤 = 다른 소리가 포커스를 가져감(아래 focusLost)
   function playSong(i) {
     songI = (i + PLAYLIST.length) % PLAYLIST.length;
     const t = PLAYLIST[songI];
     initAudio(); actx?.resume?.();
+    selfStopT = performance.now();                                // 곡을 바꾸면 이전 곡이 멈춘다(앱이 멈춘 것)
     audio.src = t.src; setSong(t.map);
     if (audioOut && !micOn) audioOut.gain.value = trackGain();     // 곡별 음량 맞춤
     audio.dataset.nosync = t.long ? '1' : '';                    // 긴 곡은 미리 분석하지 않는다
@@ -2516,6 +2536,14 @@
   const nativeNow = () => window.VecNative?.nowPlaying?.(PLAYLIST[songI].name, !audio.paused);   // 차의 지금 재생 표시와 소리 주도권
   addEventListener('pagehide', () => window.VecNative?.nowPlaying?.(PLAYLIST[songI].name, false));   // 11-09: 메뉴로 돌아가며 화면을 새로 읽을 때 음악이 멈춘 것을 차에 알린다(재생 중으로 남지 않게, 포그라운드 서비스도 내려간다)
   audio.addEventListener('playing', nativeNow); audio.addEventListener('pause', nativeNow);
+  // 11-09 Pleos Music/Audio 가이드 「AUDIOFOCUS_LOSS 를 받으면 MediaSession 이 active 로 남지 않게 stop 또는 세션 비활성화」·Gleo 호출 시 즉시 중단:
+  //   차량판의 오디오 포커스는 웹뷰(크로미움)가 쥐고, 포커스를 잃으면 크로미움이 스스로 멈춘다. 앱(화면)이 멈춘 것이 아닌데 멈췄다면 = 다른 소리가 가져간 것
+  //   → 차에 「정지」를 알려 세션을 정지·비활성화한다. 잠깐 가져간 경우(안내 음성·통화)는 크로미움이 다시 틀고, 그때 세션이 다시 켜진다
+  { const p0 = audio.pause.bind(audio); audio.pause = () => { selfStopT = performance.now(); p0(); }; }
+  audio.addEventListener('pause', () => {
+    if (!window.VecNative?.focusLost || audio.ended || performance.now() - selfStopT < 400) return;
+    window.VecNative.focusLost();
+  });
   async function setMic(on, device) {
     if (on === micOn) return;
     if (on && !device) return;                                    // 마이크 입력은 뺐다(11-08). 기기 안 재생 소리만 받는다
@@ -2779,7 +2807,7 @@
   //   공모전 판(플레오스 앱 주소 ?car=1&phase=0, 웹)은 그대로다
   const ED_CAR = qp0.get('ed') === 'car';
   // 차량 입력: 플레오스판의 네이티브 쪽이 값을 넣는다. 화면 코드는 이 값만 본다
-  const car = { on: false, kmh: 0, steer: 0, gear: 'P', brake: false, turn: 0, doors: 0, night: null, hide: false, turnT: 0, ambT: 0, seen: 0 };
+  const car = { on: false, kmh: 0, steer: 0, gear: null, brake: false, turn: 0, doors: 0, night: null, hide: false, turnT: 0, ambT: 0, seen: 0 };
   const DEMO_CAR = CAR_MODE && qp0.has('demo'), DEMO_KMH = 100;   // 버추얼 콘솔에는 속도 값이 없다. 시연에서 속도가 한 번도 안 오면 D 기어를 이 속도로 친다
   // 내비 경로 두 줄(11-05 광호님, 참고: 현대차 증강현실 내비의 차선 위 경로를 은빛 제네시스 두 줄로, 화살표 없음): 시뮬레이션 주행에서만 보인다(?route=0 이면 끔).
   // 차 앞 약 170m(46단위)를 16점으로 그린다. 실제 경로(rsim)가 있으면 그 길을, 없으면 지금 핸들로 갈 길에서 목적지 별 쪽으로 꺾이는 길을 그린다
@@ -2964,6 +2992,18 @@
   const turnIcon = t => { const [st0, hd, ex = ''] = TURN_SVG[t] || TURN_SVG.straight;
     return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">${ex.replace(/<(path|circle)/g, '<$1 class="x" pathLength="1"')}<path class="s" pathLength="1" d="${st0}"/>${hd ? `<path class="h" pathLength="1" d="${hd}"/>` : ''}</svg>`; };
   const POINT = { deep: '#9a8fc0', moon: '#b7ab98', lamp: '#b8855f', jade: '#7fa59b', mist: '#9ba5ba', dusk: '#b9707a', dawn: '#c4927a', clear: '#7ba3c1', sun: '#cdaa62', flutter: '#b8a0cc' };   // 무드 포인트(구성안 「아홉 무드」)
+  // 무드등 색 = 무드 대표색 번호(위 POINT). 「#9a8fc0」 → [154, 143, 192]
+  const rgbOf = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+  const hex6 = c => '#' + c.map(v => clamp(Math.round(v), 0, 255).toString(16).padStart(2, '0')).join('');
+  //   11-09 광호님 「무드가 바뀌는 과정에 앰비언트 라이트도 유기적으로 반응해야」: 무드등은 따로 따라가지 않고 화면 색 전환과 같은 시계·같은 곡선(theme.t, smoothstep)으로
+  //   이전 무드 번호 → 새 무드 번호로 옮겨 간다. 화면이 반쯤 바뀌면 무드등도 반쯤, 다 바뀌면 정확히 새 번호.
+  function ambTarget() {
+    const k = THEMES[theme.i]?.key;
+    const to = k && POINT[k] ? rgbOf(POINT[k]) : pal.hor.map(v => Math.round(v));
+    if (!ambFrom || theme.t >= 1) return to;
+    const e = theme.t * theme.t * (3 - 2 * theme.t);              // themeApply 와 같은 곡선
+    return ambFrom.map((v, i) => lerp(v, to[i], e));
+  }
   // 생체 정보 → 감정 상태 → 무드(11-05 광호님). 실제 차에서는 스마트워치·생체 센서 값이 들어올 자리이고, 지금은 시뮬레이션이다.
   //   신호 셋과 근거(11-05 광호님 「수치의 의학적인 근거를 찾아서 각 무드를 설정」):
   //   · 심박(HR): 깨어 쉴 때 정상 60~100회/분. 잠들면 깨어 있을 때보다 10% 넘게 떨어지는 것이 정상(10% 미만 = 「안 떨어짐」, PubMed 17954807)
@@ -3064,7 +3104,8 @@
     if (CAR_MODE && want && (guide.layT = (guide.layT || 0) - dt) <= 0) {   // 차량판: 안내판을 속도 칸과 감정 칸 사이 정가운데에(무드 글자 길이가 바뀌니 1초마다 다시 잰다)
       guide.layT = 1;
       const a = $('gSpd').getBoundingClientRect(), b = $('gBio').getBoundingClientRect(), gw = el.offsetWidth;
-      if (a.width && b.width && b.left - a.right > gw) { el.style.left = Math.round(a.right + (b.left - a.right - gw) / 2) + 'px'; el.style.transform = 'none'; }
+      if (innerWidth < innerHeight) { el.style.left = ''; el.style.transform = ''; }   // 세로 창: 감정 칸은 위로 올라가 있으니 안내판은 기본(가운데) 자리
+      else if (a.width && b.width && b.left - a.right > gw) { el.style.left = Math.round(a.right + (b.left - a.right - gw) / 2) + 'px'; el.style.transform = 'none'; }
     }
     const v = String(Math.round(st.kmh));
     if (v !== guide.v) { guide.v = v; $('gSpdN').innerHTML = v + '<small>KM/H</small>'; }
@@ -3237,7 +3278,7 @@
   const WHEELBASE = 2.895, STEER_RATIO = 14.5;                   // 그랜저 기준 추정값. 차 제원으로 확인할 것
   window.vecCar = {
     feed(o) {
-      if (o.gear != null && o.gear !== car.gear) { const was = car.gear; car.gear = o.gear; if (was === 'P') { addRipple(0, 3.5, 0.5); showEvent('출발'); } else if (o.gear === 'P') { addRipple(0, 2.5, 0.3); showEvent('주차'); } }
+      if (o.gear != null && o.gear !== car.gear) { const was = car.gear; car.gear = o.gear; if (was === 'P') { addRipple(0, 3.5, 0.5); showEvent('출발'); } else if (o.gear === 'P' && was != null) { addRipple(0, 2.5, 0.3); showEvent('주차'); } }
       if (o.kmh > 0) car.moved = true;
       if (o.kmh != null) car.kmh = o.gear === 'R' || car.gear === 'R' ? 0 : Math.max(0, +o.kmh);
       if (o.steer != null) car.steer = +o.steer;                 // 핸들 각도(도, 왼쪽 +)
@@ -3245,6 +3286,7 @@
       if (o.turn != null) car.turn = +o.turn;                    // -1 왼쪽, 1 오른쪽, 0 꺼짐
       if (o.doors != null) { if (o.doors > car.doors) bump(0.3); car.doors = +o.doors; }
       if (o.night != null) car.night = !!o.night;
+      if (o.ux != null) car.ux = !!o.ux;                           // 11-09 플랫폼 주행 규제(CarUxRestrictions): true = 주행 중(idling·moving)
       if (o.src != null) car.src = o.src;                         // 속도 출처: car(차속) · gps(기본 위치 API, 차속이 없을 때)
       car.seen = performance.now();
     },
@@ -3495,16 +3537,27 @@
       dHead = imu.dHead * flip; imu.dHead = 0;
       st.yaw = dHead / Math.max(dt, 1e-3) * 180 / Math.PI;
     }
+    if (CAR_MODE) {
+      // 심사 규정: 주행 중 화면 숨김. 11-09 Pleos 주행 규제 가이드: 플랫폼 CarUxRestrictions 가 기준(P 가 아니면 정차 idling 도 제한).
+      //   플랫폼 값(car.ux)이 있으면 그것만 따르고, 없으면 기어로 판단한다: 기어를 아직 모르면(신호 없음) 차속이 3km/h 를 넘을 때만, 기어가 P 가 아니면 숨긴다
+      //   시작 메뉴에서도 같은 기준(11-09 에뮬레이터: 메뉴 뒤 바다가 주행 중에도 움직였다)
+      const drv = car.ux != null ? car.ux : (car.gear == null ? car.kmh > 3 : car.gear !== 'P');
+      const hide = !qp0.has('demo') && drv;
+      if (hide !== car.hide) { car.hide = hide; window.vecCarHide = hide; $('driveHold').classList.toggle('hide', !hide); document.documentElement.classList.toggle('drv', hide); }
+    }
     if (car.on) {
       if (car.turn) { car.turnT -= dt; if (car.turnT <= 0) { car.turnT = 0.75; addRipple(car.turn * 2.6, 3.4, 0.14); } } else car.turnT = 0;   // 방향지시등 박자로 그쪽 물에 파문
-      const hide = !qp0.has('demo') && car.gear !== 'P' && (car.on ? car.kmh : st.kmh) > 3;   // 심사 규정: 주행 중 화면 숨김. 차량판은 실제 차속으로(녹턴의 가상 흐름 속도와 섞지 않는다)
-      if (hide !== car.hide) { car.hide = hide; window.vecCarHide = hide; $('driveHold').classList.toggle('hide', !hide); }
       car.ambT -= dt;
       if (car.ambT <= 0 && window.VecNative?.setAmbient) {        // 무드등: 공간의 색과 저음 맥박을 차 실내로 잇는다
         car.ambT = 0.12;
-        const p = clamp(0.35 + 0.65 * (mu.pulse || 0), 0, 1), c = pal.glow.map((v, i) => Math.round(lerp(pal.hor[i], v, 0.6) * p));
+        // 11-09 광호님 「무드의 메인 컬러를 컬러넘버로 뽑아 앰비언트 라이트 RGB 를 그 번호와 연동」:
+        //   색 = 지금 무드의 대표색 번호(POINT, 무드 막대·안내판 점과 같은 번호) 그대로. 무드가 바뀌면 약 1초에 걸쳐 새 번호로 옮겨 가고, 다 옮겨 가면 정확히 그 번호에 멈춘다.
+        //   무드 테마가 없는 여정 색(theme.i < 0)은 화면의 주인 색인 수평선 하늘색(pal.hor)을 쓴다. 밝기만 음악 저음 맥박(35~100%)을 따른다.
+        const want = ambTarget();
+        for (let i = 0; i < 3; i++) ambNow[i] = want[i];
+        const p = clamp(0.35 + 0.65 * (mu.pulse || 0), 0, 1), c = want.map(v => Math.round(v));
         window.VecNative.setAmbient((c[0] << 16 | c[1] << 8 | c[2]) >>> 0, Math.round(100 * p));
-        if (qp0.has('demo')) { const a = $('ambDemo'); a.classList.remove('hide'); a.firstChild.style.background = `rgb(${c[0]},${c[1]},${c[2]})`; $('ambPct').textContent = Math.round(100 * p); }
+        if (qp0.has('demo')) { const a = $('ambDemo'); a.classList.remove('hide'); a.firstChild.style.background = `rgb(${c[0]},${c[1]},${c[2]})`; $('ambPct').textContent = hex6(c) + ' · ' + Math.round(100 * p) + '%'; }
       }
     }
     if (st.accLong < -3 && now - lastBrake > 2500 && st.kmh > 10) { lastBrake = now; brake(clamp((-st.accLong - 3) / 4 + 0.6, 0.6, 1)); }

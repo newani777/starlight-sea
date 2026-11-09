@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 11-09 Pleos 런처 마스킹 대응: 적응형 아이콘. 그림(가운데 빛이 번지는 원형 그라데이션)이 가장자리까지 이어져 어떤 모양으로 잘려도 빈 곳이 없다 -->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@drawable/ic_launcher_bg" />
+    <foreground android:drawable="@android:color/transparent" />
+</adaptive-icon>

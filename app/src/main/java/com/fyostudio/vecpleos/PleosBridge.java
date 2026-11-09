@@ -66,6 +66,20 @@ public class PleosBridge implements GearSelectionListener, SteeringWheelAngleLis
 
     public PleosBridge(Context ctx, VecSink sink, CarBridge car) { this.ctx = ctx; this.sink = sink; this.car = car; }
 
+    // 11-09 Vehicle SDK 문서: getCurrentSteeringWheelAngle 은 「앞바퀴 조향각(핸들 회전각 아님)」. 에뮬레이터 Virtual Console 은 핸들각(-540~540)을 준다.
+    //   지원 범위로 둘을 가린다: 최대가 90도 이하면 앞바퀴각 → 화면이 쓰는 핸들각으로 바꾸려고 조향비 14.5 를 곱한다(화면 STEER_RATIO 와 같은 값)
+    private volatile float steerScale = 1f;
+    private void checkSteerRange() {
+        try {
+            vehicle.getSteeringWheel().checkSteeringWheelAngleCapabilities((cfg, b) -> {
+                float m = Math.max(Math.abs(b.getMinValue()), Math.abs(b.getMaxValue()));
+                steerScale = m > 0 && m <= 90 ? 14.5f : 1f;
+                Log.i(TAG, "조향각 범위 ±" + m + " → 배율 " + steerScale);
+                return Unit.INSTANCE;
+            }, fail);
+        } catch (RuntimeException e) { Log.w(TAG, "조향각 범위 조회 불가", e); }
+    }
+
     public void start() {
         try {
             vehicle = new Vehicle(ctx);
@@ -92,13 +106,16 @@ public class PleosBridge implements GearSelectionListener, SteeringWheelAngleLis
         steerPoll.post(steerTick);
         vehicle.getTurnSignal().registerTurnSignalState(this);
         vehicle.getDoor().checkDoorPositionCapabilities(map -> { listenDoors(map.keySet()); return Unit.INSTANCE; }, fail);
+        checkSteerRange();
         prepareAmbient();
     }
 
+    // 11-09 Vehicle SDK 문서 「비동기 콜백이 끝나기 전에 release 하지 말 것」: 무드등을 탑승자 설정으로 돌려놓는 요청이 끝날 시간을 두고 놓는다
     public void stop() {
         pause();
-        if (vehicle != null) vehicle.release();
+        final Vehicle v = vehicle;
         vehicle = null;
+        if (v != null) steerPoll.postDelayed(() -> { try { v.release(); } catch (RuntimeException ignored) {} }, 800);
     }
 
     private void listenDoors(Set<DoorArea> list) {
@@ -129,7 +146,7 @@ public class PleosBridge implements GearSelectionListener, SteeringWheelAngleLis
     private float steerLogged = Float.NaN;
     @Override public void onSteeringWheelAngleUpdated(Float deg) {
         if (deg == null) return;
-        car.setSteer(deg * STEER_SIGN);
+        car.setSteer(deg * STEER_SIGN * steerScale);
         if (Float.isNaN(steerLogged) || Math.abs(deg - steerLogged) >= 10f) { steerLogged = deg; Log.d(TAG, "핸들 " + deg); }
     }
     private Boolean brakeLogged;
@@ -149,8 +166,18 @@ public class PleosBridge implements GearSelectionListener, SteeringWheelAngleLis
     }
 
     // ---------- 무드등 ----------
+    // 11-09 Pleos 문서(Light): 「주행 모드에 따라 무드등 색 자동 변경」(AmbientColorAutoByDriveMode)이 켜져 있으면 차가 앱이 보낸 색을 덮어쓸 수 있다.
+    //   앱이 무드등을 쓰는 동안만 끄고, 앱이 뒤로 숨으면 탑승자가 켜 두었던 그대로 돌려준다(조회=CAR_LIGHTS, 설정=CONTROL_CAR_LIGHTS)
+    private Boolean savedAuto;
     private void prepareAmbient() {
         Light light = vehicle.getLight();
+        try {
+            light.getAmbientColorAutoByDriveModeEnabled(on -> {
+                savedAuto = on;
+                if (Boolean.TRUE.equals(on)) light.setAmbientColorAutoByDriveModeEnabled(false, v -> { Log.d(TAG, "무드등 주행 모드 자동색 끔"); return Unit.INSTANCE; }, fail);
+                return Unit.INSTANCE;
+            }, fail);
+        } catch (RuntimeException e) { Log.w(TAG, "주행 모드 자동색 조회 불가", e); }
         light.checkAmbientLightBrightnessColorCapabilities((cfg, list) -> {
             for (SeatArea a : list) {
                 light.getAmbientLightBrightnessColor(a, c -> { savedColor.put(a, c); return Unit.INSTANCE; }, fail);
@@ -159,6 +186,21 @@ public class PleosBridge implements GearSelectionListener, SteeringWheelAngleLis
             areas = list;
             return Unit.INSTANCE;
         }, fail);
+        // 11-09 Vehicle SDK 문서 대조: 밝기 범위는 차마다 다를 수 있다(0~100 이라 가정하지 않고 조회), 탑승자가 무드등을 꺼 두었으면 켜지 않는다
+        try {
+            light.checkAmbientLightBrightnessCapabilities((cfg, map) -> { levelBounds.clear(); levelBounds.putAll(map); return Unit.INSTANCE; }, fail);
+            light.checkAmbientLightSwitchCapabilities((cfg, map) -> {
+                for (SeatArea a : map.keySet()) light.getAmbientLightSwitch(a, s -> { if (s == ai.pleos.playground.vehicle.constant.control.LightSwitch.OFF) offAreas.add(a); else offAreas.remove(a); return Unit.INSTANCE; }, fail);
+                return Unit.INSTANCE;
+            }, fail);
+        } catch (RuntimeException e) { Log.w(TAG, "무드등 범위·스위치 조회 불가", e); }
+    }
+    private final Map<SeatArea, ai.pleos.playground.vehicle.api.model.capability.AreaBounds<Integer>> levelBounds = new java.util.concurrent.ConcurrentHashMap<>();
+    private final Set<SeatArea> offAreas = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    private int level(SeatArea a, int pct) {                          // 화면의 0~100% → 그 자리의 실제 밝기 범위
+        ai.pleos.playground.vehicle.api.model.capability.AreaBounds<Integer> b = levelBounds.get(a);
+        if (b == null) return pct;
+        return Math.round(b.getMinValue() + (b.getMaxValue() - b.getMinValue()) * Math.max(0, Math.min(100, pct)) / 100f);
     }
 
     public void setAmbient(int rgb, int brightness) {
@@ -168,8 +210,9 @@ public class PleosBridge implements GearSelectionListener, SteeringWheelAngleLis
         int argb = 0xFF000000 | rgb;
         Light light = vehicle.getLight();
         for (SeatArea a : areas) {
+            if (offAreas.contains(a)) continue;                            // 탑승자가 꺼 둔 자리
             if (argb != lastColor) light.setAmbientLightBrightnessColor(a, argb, (x, y) -> Unit.INSTANCE, fail);
-            if (brightness != lastLevel) light.setAmbientLightBrightness(a, brightness, (x, y) -> Unit.INSTANCE, fail);
+            if (brightness != lastLevel) light.setAmbientLightBrightness(a, level(a, brightness), (x, y) -> Unit.INSTANCE, fail);
         }
         lastColor = argb; lastLevel = brightness;
     }
@@ -178,6 +221,10 @@ public class PleosBridge implements GearSelectionListener, SteeringWheelAngleLis
         Light light = vehicle.getLight();
         for (Map.Entry<SeatArea, Integer> c : savedColor.entrySet()) light.setAmbientLightBrightnessColor(c.getKey(), c.getValue(), (x, y) -> Unit.INSTANCE, fail);
         for (Map.Entry<SeatArea, Integer> b : savedLevel.entrySet()) light.setAmbientLightBrightness(b.getKey(), b.getValue(), (x, y) -> Unit.INSTANCE, fail);
+        if (Boolean.TRUE.equals(savedAuto)) {
+            try { light.setAmbientColorAutoByDriveModeEnabled(true, v -> Unit.INSTANCE, fail); } catch (RuntimeException e) { Log.w(TAG, "주행 모드 자동색 복원 실패", e); }
+        }
+        savedAuto = null;
         lastColor = 0; lastLevel = -1;
     }
 

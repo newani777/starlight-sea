@@ -70,6 +70,11 @@ final class NaviBridge {
         @Override public void onDestinationInfo(DestinationInfo d) { dest = d; push(); }
         @Override public void onDestinationArrived(DestinationArrivedInfo a) { arrived = true; push(); }
         @Override public void onRouteCancelled() { routing = false; tbt = null; dest = null; push(); }
+        // 11-09 NaviHelper 문서 대조: 새 경로·재탐색이 끝나면 「도착」을 지우고 바로 다시 묻는다(1초 조회를 기다리지 않게)
+        @Override public void onRouteStarted(ai.pleos.playground.navi.data.RouteStartInfo i) { arrived = false; }
+        @Override public void onRoutingCompleted() { arrived = false; main.post(NaviBridge.this::ask); }
+        @Override public void onReRouteEnded() { main.post(NaviBridge.this::ask); }
+        @Override public void onDestinationChanged() { main.post(NaviBridge.this::ask); }
         @Override public void onError(ai.pleos.playground.navi.constants.NaviErrorCode e) { Log.w(TAG, "내비 오류 " + e); }
     };
 
@@ -80,6 +85,17 @@ final class NaviBridge {
         if (n.equals("TURN_LEFT") || n.equals("TURN_SHARP_L") || n.equals("TURN_UTURN")) return "left";
         if (n.equals("TURN_RIGHT") || n.equals("TURN_SHARP_R")) return "right";
         if (n.equals("TURN_EXIT_IC_R")) return "exit-right";
+        // 회전교차로 진입: 숫자는 나가는 방향의 시계 위치(02~04 오른쪽, 06 되돌아감, 08~10 왼쪽, 12 직진). 11-09 문서 대조로 추가
+        if (n.startsWith("TURN_ENTER_ROUNDABOUT_")) {
+            String h = n.substring("TURN_ENTER_ROUNDABOUT_".length());
+            if (h.startsWith("02")) return "slight-right";
+            if (h.startsWith("03") || h.startsWith("04")) return "right";
+            if (h.startsWith("06") || h.startsWith("08") || h.startsWith("09")) return "left";
+            if (h.startsWith("10")) return "slight-left";
+            return "straight";
+        }
+        if (n.equals("TURN_KEEP_LL")) return "slight-left";
+        if (n.equals("TURN_KEEP_RR")) return "slight-right";
         if (n.endsWith("_L")) return "slight-left";
         if (n.endsWith("_R")) return "slight-right";
         return "straight";
@@ -101,10 +117,15 @@ final class NaviBridge {
             if (dest != null) o.put("remain", dest.getRemainDistance()).put("time", dest.getRemainTime()).put("dest", dest.getName() == null ? "" : dest.getName())
                 .put("lat", dest.getLatitude()).put("lon", dest.getLongitude());
             String js = o.toString();
-            if (!js.equals(lastJs)) { lastJs = js; Log.i(TAG, "안내 " + (js.length() > 300 ? js.substring(0, 300) : js)); }   // 바뀔 때만 기록
+            // 바뀔 때만 기록. 11-09 Pleos 개인정보 심사: 목적지 이름·좌표는 로그에 남기지 않는다(안내 상태·회전만)
+            if (!js.equals(lastJs)) { lastJs = js; Log.i(TAG, "안내 routing=" + r + " mode=" + mode + " tbt=" + a.length() + (a.length() > 0 ? " " + a.getJSONObject(0).optString("turn") + " " + a.getJSONObject(0).optInt("dist") + "m" : "")); }
             sink.navi(js);
         } catch (Throwable t) { Log.w(TAG, "전달 실패: " + t); }
     }
+
+    // 화면이 가려지면(onStop) 조회를 멈추고, 돌아오면(onStart) 다시 묻는다. 연결과 리스너는 그대로 둔다
+    void pause() { main.removeCallbacks(poll); }
+    void resume() { if (navi != null && connected) { main.removeCallbacks(poll); ask(); main.postDelayed(poll, 1000); } }
 
     void stop() {
         main.removeCallbacks(poll);

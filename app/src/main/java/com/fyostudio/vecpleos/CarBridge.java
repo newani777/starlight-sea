@@ -2,6 +2,8 @@ package com.fyostudio.vecpleos;
 
 import android.car.Car;
 import android.car.VehiclePropertyIds;
+import android.car.drivingstate.CarUxRestrictions;
+import android.car.drivingstate.CarUxRestrictionsManager;
 import android.car.hardware.CarPropertyValue;
 import android.car.hardware.property.CarPropertyManager;
 import android.content.Context;
@@ -47,10 +49,23 @@ public class CarBridge implements CarPropertyManager.CarPropertyEventCallback {
 
     public CarBridge(Context ctx, VecSink sink) { this.ctx = ctx; this.sink = sink; }
 
+    // 11-09 Pleos 주행 규제 개발 가이드: 「앱은 플랫폼이 제공하는 CarUxRestrictions 상태를 기준으로 주행 중 UX 제한을 적용」.
+    //   주행 상태 parked(P) · idling(P 아님·속도 0) · moving 중 idling·moving 에서 requiresDistractionOptimization 이 켜진다 → 화면 그리기를 멈춘다.
+    //   플랫폼 값이 오면 그것만 따르고(Auto Hold 정차 인정 같은 지역 규칙도 플랫폼이 계산), 못 받으면 화면이 기어·속도로 대신 판단한다.
+    private CarUxRestrictionsManager ux;
+    private volatile Boolean uxBlock;
+    private final CarUxRestrictionsManager.OnUxRestrictionsChangedListener uxL = r -> setUx(r);
+    private void setUx(CarUxRestrictions r) {
+        boolean b = r != null && r.isRequiresDistractionOptimization();
+        if (uxBlock == null || uxBlock != b) Log.i(TAG, "주행 규제 " + (b ? "켜짐" : "꺼짐") + (r == null ? "" : " active=" + r.getActiveRestrictions()));
+        uxBlock = b;
+    }
+
     public void start() {
         try {
             car = Car.createCar(ctx);
             props = car == null ? null : (CarPropertyManager) car.getCarManager(Car.PROPERTY_SERVICE);
+            ux = car == null ? null : (CarUxRestrictionsManager) car.getCarManager(Car.CAR_UX_RESTRICTION_SERVICE);
         } catch (RuntimeException e) { Log.w(TAG, "차량 서비스 연결 실패", e); }
         resume();
     }
@@ -62,6 +77,7 @@ public class CarBridge implements CarPropertyManager.CarPropertyEventCallback {
         gpsOn = false;
         if (props != null && listening) props.unregisterCallback(this);
         listening = false;
+        if (ux != null) try { ux.unregisterListener(); } catch (RuntimeException ignored) {}
     }
 
     public void resume() {
@@ -70,6 +86,10 @@ public class CarBridge implements CarPropertyManager.CarPropertyEventCallback {
             try {
                 listening = props.registerCallback(this, VehiclePropertyIds.PERF_VEHICLE_SPEED, CarPropertyManager.SENSOR_RATE_UI);
             } catch (RuntimeException e) { Log.w(TAG, "속도 권한 없음", e); }
+        }
+        if (ux != null) {
+            try { ux.registerListener(uxL); setUx(ux.getCurrentCarUxRestrictions()); }
+            catch (RuntimeException e) { Log.w(TAG, "주행 규제 상태를 못 받음", e); uxBlock = null; }
         }
         main.removeCallbacks(push);
         main.post(push);
@@ -111,6 +131,7 @@ public class CarBridge implements CarPropertyManager.CarPropertyEventCallback {
         if (brake != null) s.append(",\"brake\":").append(brake);
         if (turn != null) s.append(",\"turn\":").append(turn);
         if (doors != null) s.append(",\"doors\":").append(doors);
+        if (uxBlock != null) s.append(",\"ux\":").append(uxBlock);
         return s.length() == 0 ? null : "{" + s.substring(1) + "}";
     }
 }

@@ -58,7 +58,16 @@ public class VecMediaService extends MediaBrowserService {
         super.onTaskRemoved(root);                                       // 3) 마지막에 super
     }
 
-    @Override public BrowserRoot onGetRoot(String pkg, int uid, Bundle hints) { return new BrowserRoot(ROOT, null); }
+    // 11-09 Pleos 심사(접근 제어): 목록은 시스템(차량 미디어 화면·Gleo 등 시스템 앱)과 이 앱에만 연다
+    @Override public BrowserRoot onGetRoot(String pkg, int uid, Bundle hints) {
+        if (uid == android.os.Process.myUid() || uid == android.os.Process.SYSTEM_UID) return new BrowserRoot(ROOT, null);
+        try {
+            android.content.pm.ApplicationInfo ai = getPackageManager().getApplicationInfo(pkg, 0);
+            if ((ai.flags & (android.content.pm.ApplicationInfo.FLAG_SYSTEM | android.content.pm.ApplicationInfo.FLAG_UPDATED_SYSTEM_APP)) != 0 && ai.uid == uid) return new BrowserRoot(ROOT, null);
+        } catch (android.content.pm.PackageManager.NameNotFoundException ignored) {}
+        android.util.Log.w("VecMedia", "목록 요청 거절: " + pkg);
+        return null;
+    }
 
     @Override public void onLoadChildren(String parent, Result<List<MediaBrowser.MediaItem>> result) {
         List<MediaBrowser.MediaItem> items = new ArrayList<>();
