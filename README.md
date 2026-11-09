@@ -66,6 +66,9 @@ adb shell am start -n com.fyostudio.vecpleos/.MainActivity --ez demo true
 크롬 데스크톱: https://star-drive-proto.vercel.app/vec.html?pc=1
 조작: W 가속 · S 브레이크 · A/D 조향 · 마우스 시점
 
+웹 시연판은 별빛 바다 전체를 보여 주는 판입니다. 곡 지도에 맞춰 나오는 효과(오로라·은하물고기·고래·별똥별)가 켜져 있고, 그랜드 보야주는 자율주행 이동 공간을 상정해 주행 중에도 화면을 그립니다.
+차량판(APK)은 같은 화면 원본을 쓰되, 차량 그래픽 부담을 줄이려 이 효과들을 기본으로 끄고, 주행 중에는 Pleos 주행 규제에 따라 화면을 쉽니다.
+
 ## 소스 구성
 
 | 파일 | 역할 |
