@@ -5,7 +5,7 @@
 
 ## ⚠️ 평가자 안내: 주행 화면은 「시연 모드」로 확인해 주세요
 
-주행 중 화면 기준에 따라, 기어가 P가 아니고 시속 3km를 넘으면 화면 그리기를 멈추고 음악과 무드등만 이어 갑니다.
+주행 중 화면 기준에 따라, 차량 플랫폼이 주행 규제(CarUxRestrictions)를 알리면, 곧 기어가 P가 아니면(신호 대기 정차 포함) 화면 그리기를 멈추고 음악과 무드등만 이어 갑니다.
 그래서 앱 목록에서 실행한 뒤 Virtual Console로 D 기어를 넣으면 **화면이 쉬는 것이 정상**입니다.
 주행 중 연출은 아래 명령으로 **시연 모드**를 켜고 보시면 됩니다.
 
@@ -29,7 +29,7 @@ adb shell am start -n com.fyostudio.vecpleos/.MainActivity --ez demo true
 ## APK
 
 - release APK: [`apk/FYOStudio_StarlightSea_release.apk`](apk/FYOStudio_StarlightSea_release.apk)
-- 패키지: `com.fyostudio.vecpleos` · 버전 1.0.1 (versionCode 3)
+- 패키지: `com.fyostudio.vecpleos` · 버전 1.0.2 (versionCode 3)
 
 ## 실행 방법
 
@@ -50,8 +50,8 @@ adb shell am start -n com.fyostudio.vecpleos/.MainActivity --ez demo true
 - Android Automotive OS, API 30 이상 (Pleos Connect)
 - Pleos Vehicle SDK `ai.pleos.playground:Vehicle:2.3.2`, NaviHelper SDK `ai.pleos.playground:NaviHelper:3.0.5` (Maven: `https://nexus-playground.pleos.ai/repository/maven-releases/`)
 - 권한: `pleos.car.permission.CAR_DRIVE` · `CAR_LIGHTS` · `CONTROL_CAR_LIGHTS` · `CAR_DOORS` · `NAVI_ROUTE`, `android.car.permission.CAR_SPEED`, `ACCESS_FINE_LOCATION`(차속이 없을 때 GPS 속도로 대신), `FOREGROUND_SERVICE_MEDIA_PLAYBACK`
-- Pleos 개발 가이드 대응(1.0.1): APK v3 서명, `appCategory="audio"`·`androidx.car.app.launchable`·`com.hmg.rotary.ROTARY_SUPPORTED=false` 선언, 차량 미디어 화면 「음악」 분류·검색 재생, 재생 중 포그라운드 서비스, 최상단에서 뒤로 가기는 앱을 숨김(`moveTaskToBack`), release 빌드 WebView 원격 디버깅·로컬 파일 접근 차단
-- 주행 중(기어 P가 아니고 시속 3km 초과)에는 화면 그리기를 멈추고 음악과 무드등만 이어집니다.
+- Pleos 개발 가이드 대응(1.0.2): APK v3 서명, `appCategory="audio"`·`androidx.car.app.launchable`·`com.hmg.rotary.ROTARY_SUPPORTED=false` 선언, 차량 미디어 화면 「음악」 분류·검색 재생, 재생 중 포그라운드 서비스, 최상단에서 뒤로 가기는 앱을 숨김(`moveTaskToBack`), release 빌드 WebView 원격 디버깅·로컬 파일 접근 차단
+- 주행 중(차량 플랫폼의 주행 규제 CarUxRestrictions, 곧 기어가 P가 아니면 신호 대기 정차 포함)에는 시작 메뉴까지 화면 그리기를 멈추고 음악과 무드등만 이어집니다.
 - 그랜드 보야지는 Pleos Connect 내비게이션의 실제 안내(NaviHelper: 다음 회전·거리·안내 문구·남은 거리·목적지)를 받아 안내판과 시선을 움직입니다. 에뮬레이터 내비 앱에서 목적지를 검색해 길 안내를 시작한 뒤 앱을 열면 확인할 수 있습니다. 안내가 없으면 시연 경로(광화문 → 현대자동차 본사)로 달립니다.
 - 주변 차량·보행자는 시연용 시뮬레이션 값입니다.
 
