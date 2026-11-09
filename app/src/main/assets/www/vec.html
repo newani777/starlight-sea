@@ -55,6 +55,8 @@
     html.car #guide#guide{width:56cqw}   /* 세로 창: 안내 문구가 잘리지 않게(속도 칸 오른쪽부터 화면 가운데 기준) */
     html.car #gBio{bottom:auto;top:max(16px,5cqh)}   /* 그랜드 보야지: 세로 창은 폭이 좁아 안내판과 겹친다 → 감정 칸을 위로 */
   }
+  /* 11-09 평가자 시점 검토 「HEART·HRV·SKIN 이 실제 센서 값으로 오해된다」: 차량판은 모의 값임을 감정 칸 아래에 밝힌다 */
+  html.car #gBio::after{content:'생체 값은 시연용 모의 값';position:absolute;right:0;top:calc(100% + 6px);white-space:nowrap;font:400 max(12px,1.2cqh)/1 'Noto Sans KR',system-ui,sans-serif;letter-spacing:.04em;color:#8b95a1}
   html.drv #driveHold{z-index:60}   /* 주행 중(플랫폼 주행 규제): 시작 메뉴·막대 위까지 덮는다 */
   @media (min-aspect-ratio: 3/1) { html.car #menu .mLeft{left:26cqw} }   /* 초광폭(Connect-WS 3840×850 등): 제목이 왼쪽 끝으로 멀어지지 않게 메뉴 쪽으로 모은다 */
   html.car #guide{bottom:max(18px,11cqh);width:max(300px,33cqw)}   /* 11-09: 실제 내비 안내 문구(「대왕판교IC 방면」 등)가 잘리지 않게 차량판 안내판을 조금 넓힌다 */
@@ -3109,6 +3111,8 @@
     }
     const v = String(Math.round(st.kmh));
     if (v !== guide.v) { guide.v = v; $('gSpdN').innerHTML = v + '<small>KM/H</small>'; }
+    // 11-09 평가자 시점 검토 「기어 P인데 속도가 14km/h」: 차량판은 차가 서 있거나 차속 신호가 없으면 시연 경로가 달린다 → 그 속도임을 라벨로 밝힌다
+    if (CAR_MODE) { const demoRoute = rsim.on && !live && (car.gear === 'P' || car.kmh < 3); if (demoRoute !== guide.demoRoute) { guide.demoRoute = demoRoute; $('gSpd').querySelector('.lbl').textContent = demoRoute ? 'Speed · 시연 경로' : 'Speed'; } }
     if (live) return guideLive(el);
     guide.liveKey = '';
     if (!G) return;
@@ -4260,6 +4264,7 @@
     setTimeout(() => { location.href = location.pathname + location.search.replace(/([?&])mode=[^&]*/g, '$1'); }, 1300);
   }
   const menuOn = (!CAR_MODE && !TOUCH) || ED_CAR;   // 차량 탑재판은 차에서도 새 메뉴
+  if (CAR_MODE) { const h = document.querySelector('#menu .mHint'); if (h) h.textContent = '항목을 눌러 시작';   }   // 11-09 평가자 시점 검토: 차는 터치 화면이라 키보드 안내 대신
   if (ED_CAR) for (const li of document.querySelectorAll('#menu .mList li')) { if (li.dataset.koCar) li.querySelector('.ko').textContent = li.dataset.koCar; if (li.dataset.dsCar) li.querySelector('.ds').textContent = li.dataset.dsCar; }                            // PC·웹(평가)에서는 새 메뉴, 패드·차는 예전 시작 화면
   if (menuOn) {
     $('start').classList.add('hide');
